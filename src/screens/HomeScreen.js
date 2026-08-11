@@ -154,7 +154,7 @@ export default function HomeScreen() {
         )}
 
         {ROWS.map((row) => {
-          if (row.render === 'trailer') {
+          if (row.render === '') {
             return <TrailerSpotlight key={row.key} trailers={dataByKey[row.key] ?? []} />;
           }
           return (

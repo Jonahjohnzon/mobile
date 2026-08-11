@@ -1,11 +1,13 @@
 import React from 'react';
-import { View } from 'react-native';
+import { View, Image } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
+import { useSnapshot } from 'valtio';
 import HomeScreen from '../screens/HomeScreen';
 import SearchScreen from '../screens/SearchScreen';
 import BrowseScreen from '../screens/BrowseScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import { state } from '../store/state';
 import { colors } from '../constants/theme';
 
 const Tab = createBottomTabNavigator();
@@ -19,30 +21,59 @@ const TABS = [
   { name: 'Profile', component: ProfileScreen, icon: 'user' },
 ];
 
-const TabIcon = ({ name, focused }) => (
-  <View className="items-center" style={{ width: 44 }}>
-    <Feather name={name} size={20} color={focused ? colors.marquee : colors.inkFaint} />
-    <View
-      style={{
-        width: 4,
-        height: 4,
-        borderRadius: 2,
-        marginTop: 5,
-        backgroundColor: focused ? colors.marquee : 'transparent',
-      }}
-    />
-  </View>
-);
+const TabIcon = ({ name, focused, isProfile, loggedIn }) => {
+  if (isProfile && loggedIn) {
+    return (
+      <View className="items-center" style={{ width: 44 }}>
+        <View
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 13,
+            overflow: 'hidden',
+            borderWidth: focused ? 1.5 : 0,
+            borderColor: colors.marquee,
+          }}
+        >
+          <Image source={require('../../assets/13.png')} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+        </View>
+        <View
+          style={{
+            width: 4,
+            height: 4,
+            borderRadius: 2,
+            marginTop: 5,
+            backgroundColor: focused ? colors.marquee : 'transparent',
+          }}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View className="items-center" style={{ width: 44 }}>
+      <Feather name={name} size={24} color={focused ? colors.marquee : colors.inkFaint} />
+      <View
+        style={{
+          width: 4,
+          height: 4,
+          borderRadius: 2,
+          marginTop: 5,
+          backgroundColor: focused ? colors.marquee : 'transparent',
+        }}
+      />
+    </View>
+  );
+};
 
 export default function RootNavigator() {
+  const snap = useSnapshot(state);
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
-        // Standard docked bar — full width, square corners, sits flush
-        // against the bottom edge. React Navigation handles the safe-area
-        // inset itself here, so no manual insets/positioning needed.
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopWidth: 1,
@@ -52,16 +83,33 @@ export default function RootNavigator() {
         tabBarItemStyle: { paddingTop: 8 },
       }}
     >
-      {TABS.map(({ name, component, icon }) => (
-        <Tab.Screen
-          key={name}
-          name={name}
-          component={component}
-          options={{
-            tabBarIcon: ({ focused }) => <TabIcon name={icon} focused={focused} />,
-          }}
-        />
-      ))}
+      {TABS.map(({ name, component, icon }) => {
+        const isProfile = name === 'Profile';
+        return (
+          <Tab.Screen
+            key={name}
+            name={name}
+            component={component}
+            options={{
+              tabBarIcon: ({ focused }) => (
+                <TabIcon name={icon} focused={focused} isProfile={isProfile} loggedIn={snap.log} />
+              ),
+            }}
+            listeners={
+              isProfile
+                ? ({ navigation }) => ({
+                    tabPress: (e) => {
+                      if (!state.log) {
+                        e.preventDefault();
+                        navigation.navigate('Login');
+                      }
+                    },
+                  })
+                : undefined
+            }
+          />
+        );
+      })}
     </Tab.Navigator>
   );
 }

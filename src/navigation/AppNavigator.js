@@ -10,6 +10,7 @@ import HistoryScreen from '../screens/HistoryScreen';
 import WishlistScreen from '../screens/WishlistScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
+import StreamBScreen from '../screens/StreamBScreen';
 import { colors } from '../constants/theme';
 
 const Stack = createNativeStackNavigator();
@@ -26,7 +27,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="SignUp" component={SignUpScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="Stream" component={StreamScreen} options={{ presentation: 'fullScreenModal' }} />
-      <Stack.Screen name="Telestream" component={TelestreamScreen} options={{ presentation: 'fullScreenModal' }} />
+      <Stack.Screen name="BStream" component={StreamBScreen} options={{ presentation: 'fullScreenModal' }} />
     </Stack.Navigator>
   );
 }

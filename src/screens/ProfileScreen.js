@@ -22,12 +22,16 @@ export default function ProfileScreen() {
     if (item.route) navigation.navigate(item.route);
   };
 
-  const handleLogout = async () => {
-    await apiLogout();
-    state.log = false;
-    state.id = null;
-    state.name = null;
-  };
+    const handleLogout = async () => {
+      await apiLogout();
+      state.log = false;
+      state.id = null;
+      state.name = null;
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Tabs', state: { routes: [{ name: 'Home' }] } }],
+      });
+    };
 
   return (
     <View className="flex-1 bg-bg" style={{ paddingTop: insets.top }}>

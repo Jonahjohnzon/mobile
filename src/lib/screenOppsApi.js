@@ -26,8 +26,9 @@ async function request(path, { method = 'GET', body, needsAuth = true } = {}) {
   return res.json();
 }
 
-export const pushHistory = (body) =>
-  request('/api/pushhistory', { method: 'PUT', body }).catch((e) => console.log(e));
+export const pushHistory = async (body) => {
+  return await request('/api/pushhistory', { method: 'PUT', body }).catch((e) => console.log(e));
+};
 
 export const pushWishlist = async (body) => {
   state.wishload = true;

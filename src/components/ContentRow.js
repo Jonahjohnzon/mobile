@@ -14,7 +14,8 @@ const ContentRow = ({ data, title, eyebrow, type, mode = 'details', showRank = f
         horizontal
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item, i) => `${item.id ?? item.url ?? i}`}
-        contentContainerStyle={{ paddingLeft: 16, paddingRight: 8 }}
+        style={{ marginLeft: 16, paddingRight: 16 }}
+        contentContainerStyle={{  paddingRight: 8 }}
         renderItem={({ item, index }) => (
           <PosterCard
             data={item}
