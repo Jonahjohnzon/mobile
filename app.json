@@ -17,9 +17,7 @@
       "**/*"
     ],
     "androidStatusBar": {
-      "barStyle": "light-content",
-      "backgroundColor": "#0B0D10",
-      "translucent": false
+      "barStyle": "light-content"
     },
     "ios": {
       "supportsTablet": true,
@@ -31,6 +29,7 @@
       "userInterfaceStyle": "dark",
       "icon": "./assets/logo.png",
       "backgroundColor": "#0B0D10",
+      "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#0B0D10"

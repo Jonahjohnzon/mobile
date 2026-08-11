@@ -2,7 +2,7 @@ import 'react-native-gesture-handler';
 import './global.css';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Appearance } from 'react-native';
+import { View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -19,9 +19,6 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { colors, navTheme } from './src/constants/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
-
-Appearance.setColorScheme('dark');
-
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -46,8 +43,22 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      {/*
+        Android is edge-to-edge only now — there's no real "status bar background"
+        to paint anymore. The status bar area is transparent and shows whatever
+        sits underneath it, so this root View's backgroundColor is what actually
+        gives the illusion of a colored status bar. Every screen/header that
+        reaches the top edge needs to use this same color, or you'll see a
+        mismatched strip at the very top.
+      */}
       <View style={{ flex: 1, backgroundColor: colors.bg }} onLayout={onLayout}>
-        <StatusBar style="light" backgroundColor={colors.bg} translucent={false}/>
+        {/*
+          Only `style` (icon color: "light" | "dark" | "auto") still does
+          anything on Android under edge-to-edge. `backgroundColor` and
+          `translucent` are deprecated no-ops as of recent Expo SDKs — setting
+          them does nothing in production and can trigger a prebuild warning.
+        */}
+        <StatusBar style="light" />
         <NavigationContainer theme={navTheme}>
           <AppNavigator />
         </NavigationContainer>
