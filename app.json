@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "Screenopps",
+    "slug": "screenopps-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "backgroundColor": "#0B0D10",
+    "icon": "./assets/logo.png",
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0D10"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "androidStatusBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#0B0D10",
+      "translucent": false
+    },
+    "ios": {
+      "supportsTablet": true,
+      "userInterfaceStyle": "dark",
+      "icon": "./assets/logo.png",
+      "backgroundColor": "#0B0D10"
+    },
+    "android": {
+      "userInterfaceStyle": "dark",
+      "icon": "./assets/logo.png",
+      "backgroundColor": "#0B0D10",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#0B0D10"
+      },
+      "package": "com.mid9it.screenoppsmobile"
+    },
+    "web": {
+      "backgroundColor": "#0B0D10"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4bfad794-001f-4bb6-990d-e3c59829ccd8"
+      }
+    }
+  }
+}
