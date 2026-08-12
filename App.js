@@ -1,8 +1,8 @@
 import 'react-native-gesture-handler';
 import './global.css';
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -17,6 +17,7 @@ import { JetBrainsMono_500Medium } from '@expo-google-fonts/jetbrains-mono';
 
 import AppNavigator from './src/navigation/AppNavigator';
 import { colors, navTheme } from './src/constants/theme';
+import { checkAuth } from './src/lib/authCheck';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -30,6 +31,7 @@ export default function App() {
   });
 
   const [ready, setReady] = useState(false);
+  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     if (fontsLoaded || fontError) setReady(true);
@@ -39,25 +41,29 @@ export default function App() {
     if (ready) await SplashScreen.hideAsync();
   }, [ready]);
 
+  // Cold start: check auth once fonts are ready and the app is about to show.
+  useEffect(() => {
+    if (ready) checkAuth();
+  }, [ready]);
+
+  // Resume from background: re-check auth any time the app comes back to
+  // the foreground, so a login/logout elsewhere (or a token that expired
+  // while backgrounded) is picked up without the user force-quitting.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === 'active') {
+        checkAuth();
+      }
+      appState.current = nextState;
+    });
+    return () => subscription.remove();
+  }, []);
+
   if (!ready) return null;
 
   return (
     <SafeAreaProvider>
-      {/*
-        Android is edge-to-edge only now — there's no real "status bar background"
-        to paint anymore. The status bar area is transparent and shows whatever
-        sits underneath it, so this root View's backgroundColor is what actually
-        gives the illusion of a colored status bar. Every screen/header that
-        reaches the top edge needs to use this same color, or you'll see a
-        mismatched strip at the very top.
-      */}
       <View style={{ flex: 1, backgroundColor: colors.bg }} onLayout={onLayout}>
-        {/*
-          Only `style` (icon color: "light" | "dark" | "auto") still does
-          anything on Android under edge-to-edge. `backgroundColor` and
-          `translucent` are deprecated no-ops as of recent Expo SDKs — setting
-          them does nothing in production and can trigger a prebuild warning.
-        */}
         <StatusBar style="light" />
         <NavigationContainer theme={navTheme}>
           <AppNavigator />

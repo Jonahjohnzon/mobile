@@ -34,7 +34,10 @@
         "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#0B0D10"
       },
-      "package": "com.mid9it.screenoppsmobile"
+      "package": "com.mid9it.screenoppsmobile",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "web": {
       "backgroundColor": "#0B0D10"
@@ -43,6 +46,9 @@
       "eas": {
         "projectId": "4bfad794-001f-4bb6-990d-e3c59829ccd8"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4bfad794-001f-4bb6-990d-e3c59829ccd8"
     }
   }
 }

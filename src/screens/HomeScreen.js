@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { api } from '../api/ApiCore';
 import HeroBanner from '../components/HeroBanner';
@@ -124,17 +125,19 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-bg items-center justify-center">
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={colors.marquee} size="large" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   const heroRow = ROWS.find((r) => r.heroSource);
   const heroList = dataByKey[heroRow?.key] ?? [];
 
+  // edges={['top']} only — we deliberately don't reserve the bottom inset
+  // here since that's handled by the tab bar / bottom nav, not this screen.
   return (
-    <View className="flex-1 bg-bg">
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl tintColor={colors.marquee} refreshing={refreshing} onRefresh={onRefresh} />}
@@ -173,6 +176,6 @@ export default function HomeScreen() {
 
         <View style={{ height: 24 }} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

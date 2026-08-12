@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, Image, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../api/ApiCore';
 import ReadMoreText from '../components/ReadMoreText';
 import GridPosterCard, { GAP, H_PADDING } from '../components/Gridpostercard';
@@ -88,7 +89,7 @@ export default function ActorScreen() {
   const hasMore = visibleCount < credits.length;
 
   return (
-    <View className="flex-1 bg-bg">
+    <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-bg">
       {/* Fixed back button — sits above the ScrollView, does not scroll */}
       <View
         style={{
@@ -202,6 +203,6 @@ export default function ActorScreen() {
           </>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

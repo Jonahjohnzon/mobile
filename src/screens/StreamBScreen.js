@@ -350,7 +350,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingTop: 40, // Adjust for status bar height if needed
+    paddingBottom: 16,
+    paddingHorizontal: 10,
     paddingVertical: 12,
     backgroundColor: colors.black,
     borderBottomWidth: 1,

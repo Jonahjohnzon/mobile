@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, Image, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useSnapshot } from 'valtio';
@@ -56,6 +57,7 @@ const WishlistButton = ({ onPress, loading, added }) => {
 export default function DetailsScreen() {
   const { params } = useRoute();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { id, type } = params ?? {};
   const wishload = useSnapshot(state).wishload;
 
@@ -164,9 +166,9 @@ export default function DetailsScreen() {
 
   if (loading || !detail) {
     return (
-      <View className="flex-1 bg-bg items-center justify-center">
+      <SafeAreaView edges={['bottom', 'left', 'right']} className="flex-1 bg-bg items-center justify-center">
         <ActivityIndicator color={colors.marquee} />
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -180,20 +182,20 @@ export default function DetailsScreen() {
   const isWishlisted = wishAdded || wishlistIds.includes(id);
 
   return (
-    <View className="flex-1 bg-bg">
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 10,
-          paddingTop: 9,
-          paddingHorizontal: 16,
-          paddingBottom: 12,
-        }}
-        pointerEvents="box-none"
-      >
+  <SafeAreaView edges={['top','bottom', 'left', 'right']} className="flex-1 bg-bg">
+    <View
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 10,
+        paddingTop: insets.top + 9,
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+      }}
+      pointerEvents="box-none"
+    >
         <Pressable
           onPress={() => navigation.goBack()}
           className="rounded-full items-center justify-center"
@@ -306,6 +308,6 @@ export default function DetailsScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
