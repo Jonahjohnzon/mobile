@@ -94,7 +94,7 @@ export default function ActorScreen() {
       <View
         style={{
           position: 'absolute',
-          top: 0,
+          top: 40,
           left: 0,
           right: 0,
           zIndex: 10,
