@@ -41,14 +41,10 @@ export default function App() {
     if (ready) await SplashScreen.hideAsync();
   }, [ready]);
 
-  // Cold start: check auth once fonts are ready and the app is about to show.
   useEffect(() => {
     if (ready) checkAuth();
   }, [ready]);
 
-  // Resume from background: re-check auth any time the app comes back to
-  // the foreground, so a login/logout elsewhere (or a token that expired
-  // while backgrounded) is picked up without the user force-quitting.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (appState.current.match(/inactive|background/) && nextState === 'active') {
