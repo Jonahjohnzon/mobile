@@ -5,10 +5,21 @@ import { ListServer } from '../constants/servers';
 // Auth/history/wishlist hit your own backend, so this is a separate client.
 const BASE_URL = process.env.EXPO_PUBLIC_SCREENOPPS_API_URL || 'https://screenopps.com';
 const TOKEN_KEY = 'accessToken';
+const USER_KEY = 'cachedUser';
 
 export const getToken = () => AsyncStorage.getItem(TOKEN_KEY);
 export const setToken = (token) => AsyncStorage.setItem(TOKEN_KEY, token);
 export const clearToken = () => AsyncStorage.removeItem(TOKEN_KEY);
+
+// Snapshot of { id, name } saved at login time so the app can restore a
+// session on cold start / resume without hitting a live "get current user"
+// endpoint (none exists on mobile yet).
+export const setCachedUser = (user) => AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+export const getCachedUser = async () => {
+  const raw = await AsyncStorage.getItem(USER_KEY);
+  return raw ? JSON.parse(raw) : null;
+};
+export const clearCachedUser = () => AsyncStorage.removeItem(USER_KEY);
 
 async function request(path, { method = 'GET', body, needsAuth = true } = {}) {
   
@@ -133,4 +144,8 @@ export const getVideo = async ({ id, type, season, episode }, onServerAttempt) =
 
 export const login = (body) => request('/api/login', { method: 'POST', body, needsAuth: false });
 export const signUp = (body) => request('/api/createuser', { method: 'POST', body, needsAuth: false });
-export const logout = () => clearToken();
+
+export const logout = async () => {
+  await clearToken();
+  await clearCachedUser();
+};

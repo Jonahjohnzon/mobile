@@ -4,7 +4,7 @@ import * as yup from 'yup';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { login, setToken } from '../lib/screenOppsApi';
+import { login, setToken, setCachedUser } from '../lib/screenOppsApi';
 import { state } from '../store/state';
 import { colors } from '../constants/theme';
 
@@ -73,9 +73,12 @@ export default function LoginScreen() {
       setMessage(info?.message);
       if (info?.success) {
         if (info.token) await setToken(info.token);
+        const userId = info?.data?._id ?? null;
+        const userName = info?.data?.user_name ?? info?.data?.name ?? null;
+        await setCachedUser({ id: userId, name: userName });
         state.log = true;
-        state.name = info?.data?.user_name ?? info?.data?.name ?? null;
-        state.id = info?.data?._id ?? null;
+        state.name = userName;
+        state.id = userId;
         navigation.goBack();
       }
     } catch (e) {
