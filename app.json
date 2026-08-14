@@ -3,7 +3,7 @@
     "name": "Screenopps",
     "slug": "screenopps-mobile",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "backgroundColor": "#0B0D10",

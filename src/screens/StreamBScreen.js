@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview';
 import { Feather } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { colors } from '../constants/theme'; // Assuming you have theme colors defined
-
+import * as ScreenOrientation from 'expo-screen-orientation';
 /**
  * Placeholder player screen. The web app pointed `/stream/:type/:id/:s/:e`
  * at a third-party source resolver that isn't part of the code you shared,
@@ -222,17 +222,29 @@ export default function StreamBScreen() {
 
   const { id, type, season, episode } = params ?? {};
 
+  const [isLandscape, setIsLandscape] = useState(false);
+
+  const toggleOrientation = useCallback(async () => {
+    if (isLandscape) {
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      setIsLandscape(false);
+    } else {
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      setIsLandscape(true);
+    }
+  }, [isLandscape]);
+
+  // reset to portrait when leaving this screen
   useEffect(() => {
-    // Temporary debug log — remove once you've confirmed params are consistent
-    // across every screen that navigates here.
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    };
+  }, []);
+
+  useEffect(() => {
     console.log('[StreamB] route.params:', params);
   }, [params]);
 
-  // Guard against missing/invalid params so we never build a URL containing
-  // the literal string "undefined". Template literals stringify `undefined`
-  // silently (`${undefined}` -> "undefined"), so without this check
-  // `playerUri` stays a truthy string even when the params are broken —
-  // which is what was causing the WebView to try loading a dead URL.
   const hasValidParams =
     id != null &&
     (type === 'tv' ? season != null && episode != null : true);
@@ -285,6 +297,27 @@ export default function StreamBScreen() {
           </Text>
         </Pressable>
 
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+    {/* Rotate button */}
+    <Pressable
+      onPress={toggleOrientation}
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: colors.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 8,
+      }}
+    >
+      <Feather
+        name={isLandscape ? 'smartphone' : 'rotate-cw'}
+        size={18}
+        color={colors.white ?? colors.ink}
+      />
+    </Pressable>
+
         {/* Server Selection Dropdown */}
         <View style={styles.serverDropdownContainer}>
           <Pressable onPress={() => setDropdownVisible(true)} style={styles.serverButton}>
@@ -319,6 +352,7 @@ export default function StreamBScreen() {
             </Pressable>
           </Modal>
         </View>
+      </View>
       </View>
 
       {playerUri ? (

@@ -150,7 +150,7 @@ export default function HomeScreen() {
         />
         {/* <TicketDivider /> */}
 
-        <MonetagAd height={50} />
+        {/* <MonetagAd height={50} /> */}
 
         {allFailed && (
           <View className="px-4 py-10 items-center">
