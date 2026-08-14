@@ -56,6 +56,7 @@ export default function LibraryScreen() {
           data={recent}
           keyExtractor={(item, i) => `${item.id ?? item.url ?? i}`}
           numColumns={2}
+          showsVerticalScrollIndicator={false}
           columnWrapperStyle={{ paddingHorizontal: 16, justifyContent: 'space-between' }}
           contentContainerStyle={{ paddingBottom: 24, gap: 12 }}
           ListHeaderComponent={<SectionHeader title="Your Reel" eyebrow="RESUME" />}

@@ -218,25 +218,44 @@ export default function StreamBScreen() {
   const webviewRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [isDropdownVisible, setDropdownVisible] = useState(false);
-  const [selectedApi, setSelectedApi] = useState("BACKUP-SERVER"); // Default to "c-SERVER"
+  const [selectedApi, setSelectedApi] = useState("BACKUP-SERVER");
 
   const { id, type, season, episode } = params ?? {};
 
+  useEffect(() => {
+    // Temporary debug log — remove once you've confirmed params are consistent
+    // across every screen that navigates here.
+    console.log('[StreamB] route.params:', params);
+  }, [params]);
+
+  // Guard against missing/invalid params so we never build a URL containing
+  // the literal string "undefined". Template literals stringify `undefined`
+  // silently (`${undefined}` -> "undefined"), so without this check
+  // `playerUri` stays a truthy string even when the params are broken —
+  // which is what was causing the WebView to try loading a dead URL.
+  const hasValidParams =
+    id != null &&
+    (type === 'tv' ? season != null && episode != null : true);
+
   // Define StreamApi here or pass it as a prop/context
-  const StreamApi = [
-    {
-      Name: "BACKUP-SERVER",
-      scrMovie: `https://vidnest.fun/movie/${id}`,
-      scrSeries: `https://vidnest.fun/tv/${id}/${season}/${episode}`,
-      id: 1,
-    },
-  ];
+  const StreamApi = hasValidParams
+    ? [
+            {
+          Name: "BACKUP-SERVER",
+          scrMovie: `https://vidnest.fun/movie/${id}`,
+          scrSeries: `https://vidnest.fun/tv/${id}/${season}/${episode}`,
+          id: 1,
+        }
+      ]
+    : [];
 
   // Find the currently selected API object
   const currentApi = StreamApi.find(api => api.Name === selectedApi) || StreamApi[0];
 
   // Determine the player URI based on type and selected API
-  const playerUri = type === "tv" ? currentApi.scrSeries : currentApi.scrMovie;
+  const playerUri = hasValidParams
+    ? (type === "tv" ? currentApi.scrSeries : currentApi.scrMovie)
+    : null;
 
   const handleShouldStartLoad = useCallback((request) => {
     if (isBlockedUrl(request.url)) {

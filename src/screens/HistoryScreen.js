@@ -134,6 +134,7 @@ export default function HistoryScreen() {
           columnWrapperStyle={{ paddingHorizontal: H_PADDING, justifyContent: 'flex-start', gap: GAP }}
           contentContainerStyle={{ paddingBottom: 24, gap: GAP }}
           onScroll={handleScroll}
+          showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
           refreshControl={
             <RefreshControl

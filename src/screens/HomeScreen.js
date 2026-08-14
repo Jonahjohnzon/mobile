@@ -7,6 +7,7 @@ import HeroBanner from '../components/HeroBanner';
 import TicketDivider from '../components/TicketDivider';
 import ContentRow from '../components/ContentRow';
 import TrailerSpotlight from '../components/TrailerSpotlight';
+import MonetagAd from '../components/MonetagAd';
 import { colors } from '../constants/theme';
 
 // Same config-driven row list as the web Home.jsx — adding a category is
@@ -148,6 +149,8 @@ export default function HomeScreen() {
           onPressInfo={(m) => navigation.navigate('Details', { id: m.id, type: 'movie' })}
         />
         {/* <TicketDivider /> */}
+
+        <MonetagAd height={50} />
 
         {allFailed && (
           <View className="px-4 py-10 items-center">

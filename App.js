@@ -14,7 +14,6 @@ import {
   Inter_600SemiBold,
 } from '@expo-google-fonts/inter';
 import { JetBrainsMono_500Medium } from '@expo-google-fonts/jetbrains-mono';
-
 import AppNavigator from './src/navigation/AppNavigator';
 import { colors, navTheme } from './src/constants/theme';
 import { checkAuth } from './src/lib/authCheck';

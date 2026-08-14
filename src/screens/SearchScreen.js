@@ -151,6 +151,7 @@ export default function SearchScreen() {
         data={results}
         keyExtractor={(item, i) => `${item.media_type || 'movie'}-${item.id}-${i}`}
         numColumns={3}
+        showsVerticalScrollIndicator={false}
         columnWrapperStyle={{ paddingHorizontal: H_PADDING, justifyContent: 'flex-start', gap: GAP }}
         contentContainerStyle={{ paddingBottom: 24, gap: GAP }}
         renderItem={({ item }) => <GridPosterCard data={item} onPress={onPressResult} />}

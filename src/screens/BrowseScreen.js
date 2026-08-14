@@ -328,6 +328,7 @@ export default function BrowseScreen() {
           data={results}
           keyExtractor={(item, i) => `${type}-${item.id}-${i}`}
           numColumns={3}
+          showsVerticalScrollIndicator={false}
           columnWrapperStyle={{  justifyContent: 'flex-start', gap: GAP }}
           contentContainerStyle={{ paddingBottom: 24, gap: GAP }}
           onScroll={handleScroll}
