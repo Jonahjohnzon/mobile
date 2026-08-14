@@ -85,50 +85,38 @@ export default function DetailsScreen() {
   const [episodesLoading, setEpisodesLoading] = useState(false);
 
   // ── Ad WebView ────────────────────────────────────────────────────────
-  // The WebView below is mounted ONCE, unconditionally, for the lifetime
-  // of this screen — it's never inside a Modal or an `{adVisible && ...}`
-  // block. We only toggle its on-screen visibility (opacity/zIndex/
-  // pointerEvents). This means:
-  //   - It starts loading as soon as the screen mounts (prefetch), instead
-  //     of only starting when the user taps Play.
-  //   - Tapping Play reuses the SAME native WebView instance (see
-  //     handlePlay below) instead of spinning up a fresh one each time,
-  //     which was the main source of the "slower than a browser" feeling.
-  //     handlePlay calls .reload() so each shown ad is still a genuine
-  //     fresh pageview/impression, just without the cold native-instance
-  //     cost — DNS/TLS/disk-cache/cookies all stay warm across reloads.
+  // Mounted ONCE, unconditionally, for the lifetime of this screen. We
+  // only toggle on-screen visibility (opacity/zIndex/pointerEvents), so
+  // it can preload before the first tap and stay warm across taps.
+  //
+  // IMPORTANT: we no longer call .reload() at the moment the user taps
+  // Play. That was forcing a fresh network round-trip right when the
+  // overlay appeared, which is what made it feel slow — the preload was
+  // being thrown away at the worst possible time. Instead, the "get a
+  // fresh copy ready for next time" reload now happens in the background
+  // right after the CURRENT ad closes (see proceedToPlay), while the
+  // overlay is hidden. By the time cooldown has passed and the user taps
+  // Play again, the fresh copy has usually already finished loading.
   const [adVisible, setAdVisible] = useState(false);
   const [adReady, setAdReady] = useState(false);
   const adWebViewRef = useRef(null);
   const pendingPlayRef = useRef({ season: '1', episode: '1' });
 
   // Per-session cooldown so rapid repeat Play taps can't spam-reload the
-  // ad and fire multiple impressions in quick succession — networks like
-  // Monetag can flag that as invalid/abusive traffic. If Play is tapped
-  // again inside the cooldown window, we skip re-showing the ad entirely
-  // and go straight to the player.
+  // ad and fire multiple impressions in quick succession.
   const lastAdShownRef = useRef(0);
   const AD_COOLDOWN_MS = 60000; // 60s between ad impressions
 
   // Mirrors `closeCountdown` state, but read synchronously inside the
-  // hardwareBackPress handler below. That handler is registered once per
-  // `adVisible` toggle (see the effect's dependency array), so if it read
-  // `closeCountdown` directly via closure it would be stuck on whatever
-  // value existed at registration time (15) — always > 0 — letting back
-  // skip the ad on the very first press, every time. The ref always holds
-  // the live value, so the handler can gate on the real current countdown.
+  // hardwareBackPress / beforeRemove handlers below, which are registered
+  // once per `adVisible` toggle. Reading a ref instead of closed-over
+  // state means the handlers always see the live countdown value.
   const closeCountdownRef = useRef(15);
 
   useEffect(() => {
-    // Temporary debug log — confirms whether this screen itself was ever
-    // opened without a valid id/type. If this logs undefined, the bug is
-    // in whatever screen navigated to Details, not in this file.
     console.log('[Details] route.params:', params);
   }, [params]);
 
-  // Detail + similar + credits + wishlist ids fetch together, same
-  // Promise.allSettled pattern used everywhere else in this app — one
-  // failing endpoint doesn't block the others from rendering.
   useEffect(() => {
     if (id == null || type == null) {
       console.warn('[Details] Missing id/type in route params, skipping fetch:', params);
@@ -180,8 +168,6 @@ export default function DetailsScreen() {
     [id, type]
   );
 
-  // Once the show's total season count is known, default to Season 1 and
-  // fetch its episode list — mirrors the web app defaulting `part` to 1.
   useEffect(() => {
     if (type === 'tv' && detail?.number_of_seasons) {
       setSelectedSeason(1);
@@ -194,24 +180,15 @@ export default function DetailsScreen() {
     loadSeason(s);
   };
 
-  // Android hardware back button while the ad overlay is showing must NOT
-  // let the user skip the ad early. Previously this called proceedToPlay()
-  // unconditionally, which meant: tap Play (fires the ad impression via
-  // .reload()) → immediately hit back → land in the player having watched
-  // 0 seconds of the ad. That's a straight-up skip button, and it also
-  // made the on-screen countdown purely decorative on Android since back
-  // bypassed it entirely.
-  //
-  // Now back is gated on the same condition the X (close) button uses:
-  // closeCountdown must have reached 0. Before that, we still consume the
-  // back press (return true) so the user doesn't fall through to backing
-  // out of the screen underneath — we just don't advance to the player.
+  // ── Android hardware back ───────────────────────────────────────────
+  // Consumes the hardware back press while the ad is up and the
+  // countdown hasn't finished. This alone is NOT enough — see the
+  // `beforeRemove` listener below for why.
   useEffect(() => {
     if (!adVisible) return undefined;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (closeCountdownRef.current > 0) {
-        // Ad still "airing" — swallow the back press, ad stays on screen.
-        return true;
+        return true; // swallow — ad stays up
       }
       proceedToPlay();
       return true;
@@ -220,15 +197,32 @@ export default function DetailsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adVisible]);
 
-  // Play opens the ad overlay instead of navigating directly. The actual
-  // navigation + recently-watched bookkeeping is deferred to proceedToPlay,
-  // which runs when the user taps close (or the Android back button, once
-  // the countdown has finished).
-  //
-  // Guarded: if id/type are missing (this screen was opened without valid
-  // params) or, for a TV show, season/episode weren't resolved yet, we bail
-  // out instead of opening the ad and later navigating to a Stream screen
-  // with `undefined` baked into the player URL.
+  // ── Universal back-navigation guard ─────────────────────────────────
+  // `BackHandler` only covers Android's hardware back button. It does
+  // NOT cover:
+  //   - iOS's edge-swipe-back gesture
+  //   - Android's edge-swipe-back gesture (if gestureEnabled)
+  //   - the header's own back chevron Pressable calling navigation.goBack()
+  // All of those go straight through React Navigation's internal
+  // goBack()/pop(), which fires `beforeRemove` right before the screen is
+  // actually removed. Listening here and calling `e.preventDefault()`
+  // blocks the navigation itself — this is what was letting users skip
+  // the ad by swiping back instead of using the hardware/OS back button.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (!adVisible) return; // no ad up, allow normal navigation
+      if (closeCountdownRef.current === 0) return; // countdown done, allow
+      e.preventDefault();
+    });
+    return unsubscribe;
+  }, [navigation, adVisible]);
+
+  // Also disable the swipe gesture outright while the ad is up, so users
+  // don't even get a half-swipe visual glitch before being blocked.
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: !adVisible });
+  }, [navigation, adVisible]);
+
   const handlePlay = (season = '1', episode = '1') => {
     if (id == null || type == null) {
       console.warn('[Details] handlePlay called without valid id/type, aborting:', { id, type });
@@ -244,18 +238,14 @@ export default function DetailsScreen() {
     const withinCooldown = now - lastAdShownRef.current < AD_COOLDOWN_MS;
 
     if (withinCooldown) {
-      // Already showed a real ad impression recently — don't reload/re-fire
-      // another one, just take the user straight to the player.
       proceedToPlay();
       return;
     }
 
     lastAdShownRef.current = now;
-    setAdReady(false);
-    // Reload forces a genuine fresh pageview/impression on this tap, while
-    // still reusing the WebView's warm DNS/TLS/disk-cache from the
-    // preloaded instance — see the persistent-WebView note above.
-    adWebViewRef.current?.reload();
+    // No reload() here anymore — whatever is currently loaded in the
+    // WebView (either the initial mount load, or the background refresh
+    // kicked off after the previous ad closed) is shown immediately.
     setAdVisible(true);
   };
 
@@ -263,8 +253,6 @@ export default function DetailsScreen() {
     setAdVisible(false);
     const { season, episode } = pendingPlayRef.current;
 
-    // Belt-and-braces: handlePlay already validated these, but re-check
-    // right before navigating in case something cleared params mid-flow.
     if (id == null || type == null) {
       console.warn('[Details] proceedToPlay: missing id/type, not navigating:', { id, type });
       return;
@@ -279,6 +267,14 @@ export default function DetailsScreen() {
     } catch (err) {
       console.error("Couldn't update recently-watched:", err);
     }
+
+    // Prep a fresh copy of the ad in the background, hidden, so it's
+    // (hopefully) already loaded by the time the user taps Play again.
+    // This is the part that used to happen synchronously at tap-time —
+    // moving it here is what actually fixes the "feels slow" complaint.
+    setAdReady(false);
+    adWebViewRef.current?.reload();
+
     navigation.navigate('Stream', { id, type, season, episode });
   };
 
@@ -343,7 +339,7 @@ export default function DetailsScreen() {
           paddingHorizontal: 16,
           paddingBottom: 12,
         }}
-        pointerEvents="box-none"
+        pointerEvents={adVisible ? 'none' : 'box-none'}
       >
         <Pressable
           onPress={() => navigation.goBack()}
@@ -439,9 +435,6 @@ export default function DetailsScreen() {
               <EpisodeList
                 episodes={episodes}
                 onPressEpisode={(ep) => {
-                  // episode_number can be missing/null on malformed API
-                  // entries — skip rather than sending an undefined
-                  // episode number through to the player.
                   if (ep?.episode_number == null) {
                     console.warn('[Details] Episode missing episode_number, ignoring tap:', ep);
                     return;
@@ -467,15 +460,6 @@ export default function DetailsScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/*
-        Ad overlay — NOT a <Modal>. Modal remounts/tears down its children
-        on visibility changes on some platforms, which was defeating any
-        caching/prefetch benefit. This is a plain absolutely-positioned
-        View whose visibility is purely a style toggle; the WebView inside
-        it is declared once below and never unmounts while this screen is
-        alive, so it can preload ahead of the first tap and reuse its
-        cache/cookies/connection on every subsequent tap.
-      */}
       <View
         pointerEvents={adVisible ? 'auto' : 'none'}
         style={{
@@ -497,9 +481,6 @@ export default function DetailsScreen() {
           containerStyle={{ backgroundColor: '#000' }}
           startInLoadingState
           onLoadEnd={() => setAdReady(true)}
-          // Caching / cookies — without these, some ad SDKs re-init from
-          // scratch on every load instead of reusing warm state, which is
-          // a big part of why a system browser tab feels faster.
           cacheEnabled
           cacheMode="LOAD_DEFAULT"
           domStorageEnabled
