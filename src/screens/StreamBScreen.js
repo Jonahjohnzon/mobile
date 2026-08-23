@@ -335,7 +335,7 @@ export default function StreamBScreen() {
               webviewRef.current?.injectJavaScript(CHROME_RESET_JS);
               // webviewRef.current?.injectJavaScript(AD_BLOCK_JS);
             }}
-            onShouldStartLoadWithRequest={handleShouldStartLoad}
+            // onShouldStartLoadWithRequest={handleShouldStartLoad}
             onOpenWindow={() => {}}
             setSupportMultipleWindows={false}
           />
