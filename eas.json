@@ -7,13 +7,27 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "channel": "development"
+      "channel": "development",
+      "env": {
+        "EXPO_PUBLIC_MOVIELINK": "https://api.themoviedb.org",
+        "EXPO_PUBLIC_BEARER": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJhYmQwNzE0ZjhlNzc4Y2JmM2I4ZjcxYjUwYTUxZTJhMyIsIm5iZiI6MTcxNTc3NDM5MS42NTc5OTk4LCJzdWIiOiI2NjQ0YTNiNzhlNjQ5N2VmNmU1YmM5ZDgiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.WE8mYd5G9XodcUlcqjSUabcG62iHy6Tg8WubSNoOT5o",
+        "EXPO_PUBLIC_SIZEIMAGE": "https://image.tmdb.org/t/p/w500",
+        "EXPO_PUBLIC_SIZEIMAGEPHONE": "https://www.themoviedb.org/t/p/w1280",
+        "EXPO_PUBLIC_SCREENOPPS_API_URL": "https://screenopps.com"
+      }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_MOVIELINK": "https://api.themoviedb.org",
+        "EXPO_PUBLIC_BEARER": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJhYmQwNzE0ZjhlNzc4Y2JmM2I4ZjcxYjUwYTUxZTJhMyIsIm5iZiI6MTcxNTc3NDM5MS42NTc5OTk4LCJzdWIiOiI2NjQ0YTNiNzhlNjQ5N2VmNmU1YmM5ZDgiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.WE8mYd5G9XodcUlcqjSUabcG62iHy6Tg8WubSNoOT5o",
+        "EXPO_PUBLIC_SIZEIMAGE": "https://image.tmdb.org/t/p/w500",
+        "EXPO_PUBLIC_SIZEIMAGEPHONE": "https://www.themoviedb.org/t/p/w1280",
+        "EXPO_PUBLIC_SCREENOPPS_API_URL": "https://screenopps.com"
       }
     },
     "production": {
@@ -21,6 +35,13 @@
       "channel": "production",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_MOVIELINK": "https://api.themoviedb.org",
+        "EXPO_PUBLIC_BEARER": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJhYmQwNzE0ZjhlNzc4Y2JmM2I4ZjcxYjUwYTUxZTJhMyIsIm5iZiI6MTcxNTc3NDM5MS42NTc5OTk4LCJzdWIiOiI2NjQ0YTNiNzhlNjQ5N2VmNmU1YmM5ZDgiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.WE8mYd5G9XodcUlcqjSUabcG62iHy6Tg8WubSNoOT5o",
+        "EXPO_PUBLIC_SIZEIMAGE": "https://image.tmdb.org/t/p/w500",
+        "EXPO_PUBLIC_SIZEIMAGEPHONE": "https://www.themoviedb.org/t/p/w1280",
+        "EXPO_PUBLIC_SCREENOPPS_API_URL": "https://screenopps.com"
       }
     }
   },
