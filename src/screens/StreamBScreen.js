@@ -204,14 +204,14 @@ const CHROME_RESET_JS = `
 })();
 `;
 
-function isBlockedUrl(url) {
-  try {
-    const host = new URL(url).hostname.replace(/^www\./, '');
-    return BLOCKED_DOMAINS.some((domain) => host === domain || host.endsWith('.' + domain));
-  } catch (e) {
-    return false;
-  }
-}
+// function isBlockedUrl(url) {
+//   try {
+//     const host = new URL(url).hostname.replace(/^www\./, '');
+//     return BLOCKED_DOMAINS.some((domain) => host === domain || host.endsWith('.' + domain));
+//   } catch (e) {
+//     return false;
+//   }
+// }
 
 const FULLSCREEN_WATCH_JS = `
   (function() {
@@ -251,17 +251,7 @@ export default function StreamBScreen() {
 
   const { id, type, season, episode } = params ?? {};
 
-  const [isLandscape, setIsLandscape] = useState(false);
 
-  const toggleOrientation = useCallback(async () => {
-    if (isLandscape) {
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-      setIsLandscape(false);
-    } else {
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-      setIsLandscape(true);
-    }
-  }, [isLandscape]);
 
   // reset to portrait when leaving this screen
   useEffect(() => {
@@ -298,12 +288,12 @@ export default function StreamBScreen() {
     ? (type === "tv" ? currentApi.scrSeries : currentApi.scrMovie)
     : null;
 
-  const handleShouldStartLoad = useCallback((request) => {
-    if (isBlockedUrl(request.url)) {
-      return false;
-    }
-    return true;
-  }, []);
+  // const handleShouldStartLoad = useCallback((request) => {
+  //   if (isBlockedUrl(request.url)) {
+  //     return false;
+  //   }
+  //   return true;
+  // }, []);
 
 
   
@@ -338,12 +328,12 @@ export default function StreamBScreen() {
             overScrollMode="never"
             allowsLinkPreview={false}
             injectedJavaScriptBeforeContentLoaded={CHROME_RESET_JS}
-            injectedJavaScript={`${AD_BLOCK_JS}\n${FULLSCREEN_WATCH_JS}`}
+            injectedJavaScript={FULLSCREEN_WATCH_JS}
             onMessage={handleWebViewMessage}
             onLoadEnd={() => {
               setLoading(false);
               webviewRef.current?.injectJavaScript(CHROME_RESET_JS);
-              webviewRef.current?.injectJavaScript(AD_BLOCK_JS);
+              // webviewRef.current?.injectJavaScript(AD_BLOCK_JS);
             }}
             onShouldStartLoadWithRequest={handleShouldStartLoad}
             onOpenWindow={() => {}}

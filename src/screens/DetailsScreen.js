@@ -91,13 +91,12 @@ export default function DetailsScreen() {
   // ── Ad overlay (Monetag direct link, opened via in-app browser tab) ──
   // adVisible: the "watch ad" prompt is up.
   // adOpening: the in-app browser tab is being opened / is open — disables
-  //   the button so it can't be double-tapped while we wait for it to close.
+  //   the buttons so they can't be tapped while we wait for it to close.
   const [adVisible, setAdVisible] = useState(false);
   const [adOpening, setAdOpening] = useState(false);
 
   const pendingPlayRef = useRef({ season: '1', episode: '1' });
   const lastAdShownRef = useRef(0);
-
 
   useEffect(() => {
     if (id == null || type == null) {
@@ -205,7 +204,6 @@ export default function DetailsScreen() {
       return;
     }
 
-    lastAdShownRef.current = now;
     setAdVisible(true);
   };
 
@@ -234,6 +232,10 @@ export default function DetailsScreen() {
 
   const handleAcceptAd = async () => {
     setAdOpening(true);
+    // Cooldown starts only once the user actually agrees to watch — not
+    // when the prompt merely opens — so cancelling doesn't grant a free
+    // skip-the-ad window on the next Play tap.
+    lastAdShownRef.current = Date.now();
     try {
       // Opens Chrome Custom Tabs (Android) / SFSafariViewController (iOS):
       // a real browser instance shown as an in-app modal with its own
@@ -245,6 +247,12 @@ export default function DetailsScreen() {
     } finally {
       proceedToPlay();
     }
+  };
+
+  // Cancel just closes the prompt — no navigation, no ad, nothing plays.
+  const handleCancelAd = () => {
+    setAdVisible(false);
+    setAdOpening(false);
   };
 
   const handleWishlist = async () => {
@@ -472,6 +480,24 @@ export default function DetailsScreen() {
               Watch Ad & Continue
             </Text>
           )}
+        </Pressable>
+
+        <Pressable
+          onPress={adOpening ? undefined : handleCancelAd}
+          disabled={adOpening}
+          className="rounded-full py-3.5 px-8 mt-3"
+          style={{
+            backgroundColor: 'transparent',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.2)',
+            minWidth: 200,
+            alignItems: 'center',
+            opacity: adOpening ? 0.4 : 1,
+          }}
+        >
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: 'rgba(255,255,255,0.7)' }}>
+            Cancel
+          </Text>
         </Pressable>
       </View>
     </SafeAreaView>
