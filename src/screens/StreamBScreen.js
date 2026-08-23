@@ -204,14 +204,14 @@ const CHROME_RESET_JS = `
 })();
 `;
 
-// function isBlockedUrl(url) {
-//   try {
-//     const host = new URL(url).hostname.replace(/^www\./, '');
-//     return BLOCKED_DOMAINS.some((domain) => host === domain || host.endsWith('.' + domain));
-//   } catch (e) {
-//     return false;
-//   }
-// }
+function isBlockedUrl(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    return BLOCKED_DOMAINS.some((domain) => host === domain || host.endsWith('.' + domain));
+  } catch (e) {
+    return false;
+  }
+}
 
 const FULLSCREEN_WATCH_JS = `
   (function() {
@@ -288,12 +288,12 @@ export default function StreamBScreen() {
     ? (type === "tv" ? currentApi.scrSeries : currentApi.scrMovie)
     : null;
 
-  // const handleShouldStartLoad = useCallback((request) => {
-  //   if (isBlockedUrl(request.url)) {
-  //     return false;
-  //   }
-  //   return true;
-  // }, []);
+  const handleShouldStartLoad = useCallback((request) => {
+    if (isBlockedUrl(request.url)) {
+      return false;
+    }
+    return true;
+  }, []);
 
 
   
@@ -328,14 +328,14 @@ export default function StreamBScreen() {
             overScrollMode="never"
             allowsLinkPreview={false}
             injectedJavaScriptBeforeContentLoaded={CHROME_RESET_JS}
-            injectedJavaScript={FULLSCREEN_WATCH_JS}
+            injectedJavaScript={`${AD_BLOCK_JS}\n${FULLSCREEN_WATCH_JS}`}
             onMessage={handleWebViewMessage}
             onLoadEnd={() => {
               setLoading(false);
               webviewRef.current?.injectJavaScript(CHROME_RESET_JS);
-              // webviewRef.current?.injectJavaScript(AD_BLOCK_JS);
+              webviewRef.current?.injectJavaScript(AD_BLOCK_JS);
             }}
-            // onShouldStartLoadWithRequest={handleShouldStartLoad}
+            onShouldStartLoadWithRequest={handleShouldStartLoad}
             onOpenWindow={() => {}}
             setSupportMultipleWindows={false}
           />
