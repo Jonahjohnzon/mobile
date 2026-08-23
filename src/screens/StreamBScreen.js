@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { colors } from '../constants/theme'; // Assuming you have theme colors defined
 import * as ScreenOrientation from 'expo-screen-orientation';
+
 /**
  * Placeholder player screen. The web app pointed `/stream/:type/:id/:s/:e`
  * at a third-party source resolver that isn't part of the code you shared,
@@ -212,12 +213,40 @@ function isBlockedUrl(url) {
   }
 }
 
+const FULLSCREEN_WATCH_JS = `
+  (function() {
+    document.addEventListener('fullscreenchange', function() {
+      const isFullscreen = !!document.fullscreenElement;
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'fullscreen', value: isFullscreen }));
+    });
+    document.addEventListener('webkitfullscreenchange', function() {
+      const isFullscreen = !!document.webkitFullscreenElement;
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'fullscreen', value: isFullscreen }));
+    });
+    true;
+  })();
+`;
+
+function handleWebViewMessage(event) {
+  try {
+    const data = JSON.parse(event.nativeEvent.data);
+    if (data.type === 'fullscreen') {
+      if (data.value) {
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      } else {
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      }
+    }
+  } catch {
+    // ignore non-JSON messages from other injected scripts
+  }
+}
+
 export default function StreamBScreen() {
   const { params } = useRoute();
   const navigation = useNavigation();
   const webviewRef = useRef(null);
   const [loading, setLoading] = useState(true);
-  const [isDropdownVisible, setDropdownVisible] = useState(false);
   const [selectedApi, setSelectedApi] = useState("BACKUP-SERVER");
 
   const { id, type, season, episode } = params ?? {};
@@ -241,25 +270,25 @@ export default function StreamBScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    console.log('[StreamB] route.params:', params);
-  }, [params]);
+
 
   const hasValidParams =
     id != null &&
     (type === 'tv' ? season != null && episode != null : true);
 
   // Define StreamApi here or pass it as a prop/context
-  const StreamApi = hasValidParams
-    ? [
-            {
-          Name: "BACKUP-SERVER",
-          scrMovie: `https://vidnest.fun/movie/${id}`,
-          scrSeries: `https://vidnest.fun/tv/${id}/${season}/${episode}`,
-          id: 1,
-        }
-      ]
-    : [];
+    const StreamApi = hasValidParams
+      ? [
+              {
+            Name: "BACKUP-SERVER",
+            scrMovie: `https://player.videasy.net/movie/${id}`,
+            scrSeries: `https://player.videasy.net/tv/${id}/${season}/${episode}`,
+            scrAnimeMovie: `https://player.videasy.net/anime/anilist_id`,
+            scrAnimeSeries: `https://player.videasy.net/anime/anilist_id/${episode}`,
+            id: 1,
+          }
+        ]
+      : [];
 
   // Find the currently selected API object
   const currentApi = StreamApi.find(api => api.Name === selectedApi) || StreamApi[0];
@@ -276,15 +305,8 @@ export default function StreamBScreen() {
     return true;
   }, []);
 
-  const handleApiSelect = (apiName) => {
-    if (apiName === selectedApi) {
-      setDropdownVisible(false);
-      return;
-    }
-    setSelectedApi(apiName);
-    setDropdownVisible(false);
-    setLoading(true); // Show loading when server changes
-  };
+
+  
 
   // --- Rendering ---
   return (
@@ -298,60 +320,6 @@ export default function StreamBScreen() {
         </Pressable>
 
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-    {/* Rotate button */}
-    <Pressable
-      onPress={toggleOrientation}
-      style={{
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: colors.surface,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 8,
-      }}
-    >
-      <Feather
-        name={isLandscape ? 'smartphone' : 'rotate-cw'}
-        size={18}
-        color={colors.white ?? colors.ink}
-      />
-    </Pressable>
-
-        {/* Server Selection Dropdown */}
-        <View style={styles.serverDropdownContainer}>
-          <Pressable onPress={() => setDropdownVisible(true)} style={styles.serverButton}>
-            <Text style={styles.serverButtonText}>{selectedApi}</Text>
-            <Feather name="chevron-down" size={16} color={colors.white} style={{ marginLeft: 5 }} />
-          </Pressable>
-
-          <Modal
-            visible={isDropdownVisible}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setDropdownVisible(false)}
-          >
-            <Pressable style={styles.modalOverlay} onPress={() => setDropdownVisible(false)}>
-              <View style={styles.dropdownMenu}>
-                <FlatList
-                  data={StreamApi}
-                  keyExtractor={(item) => item.id.toString()}
-                  renderItem={({ item }) => (
-                    <Pressable
-                      style={[
-                        styles.dropdownItem,
-                        item.Name === selectedApi && styles.selectedDropdownItem,
-                      ]}
-                      onPress={() => handleApiSelect(item.Name)}
-                    >
-                      <Text style={styles.dropdownItemText}>{item.Name}</Text>
-                    </Pressable>
-                  )}
-                />
-              </View>
-            </Pressable>
-          </Modal>
-        </View>
       </View>
       </View>
 
@@ -370,7 +338,8 @@ export default function StreamBScreen() {
             overScrollMode="never"
             allowsLinkPreview={false}
             injectedJavaScriptBeforeContentLoaded={CHROME_RESET_JS}
-            injectedJavaScript={AD_BLOCK_JS}
+            injectedJavaScript={`${AD_BLOCK_JS}\n${FULLSCREEN_WATCH_JS}`}
+            onMessage={handleWebViewMessage}
             onLoadEnd={() => {
               setLoading(false);
               webviewRef.current?.injectJavaScript(CHROME_RESET_JS);

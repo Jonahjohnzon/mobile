@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   BackHandler,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
+import * as WebBrowser from 'expo-web-browser';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -27,7 +27,12 @@ import EpisodeList from '../components/EpisodeList';
 import ReadMoreText from '../components/ReadMoreText';
 import { colors } from '../constants/theme';
 
-const AD_URL = 'https://screenopps.com/ads';
+// Monetag direct link. Opened via expo-web-browser (Chrome Custom Tabs on
+// Android / SFSafariViewController on iOS) so it renders as a real browser
+// instance in an in-app modal with its own close button, rather than
+// exiting to Chrome or being embedded in a scriptable WebView.
+const AD_URL = 'https://omg10.com/4/11569591';
+const AD_COOLDOWN_MS = 60000; // 60s between ad impressions per session
 
 const WishlistButton = ({ onPress, loading, added }) => {
   if (added) {
@@ -76,7 +81,6 @@ export default function DetailsScreen() {
   const [similar, setSimilar] = useState([]);
   const [cast, setCast] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [closeCountdown, setCloseCountdown] = useState(15);
   const [wishlistIds, setWishlistIds] = useState([]);
   const [wishAdded, setWishAdded] = useState(false);
 
@@ -84,38 +88,16 @@ export default function DetailsScreen() {
   const [episodes, setEpisodes] = useState([]);
   const [episodesLoading, setEpisodesLoading] = useState(false);
 
-  // ── Ad WebView ────────────────────────────────────────────────────────
-  // Mounted ONCE, unconditionally, for the lifetime of this screen. We
-  // only toggle on-screen visibility (opacity/zIndex/pointerEvents), so
-  // it can preload before the first tap and stay warm across taps.
-  //
-  // IMPORTANT: we no longer call .reload() at the moment the user taps
-  // Play. That was forcing a fresh network round-trip right when the
-  // overlay appeared, which is what made it feel slow — the preload was
-  // being thrown away at the worst possible time. Instead, the "get a
-  // fresh copy ready for next time" reload now happens in the background
-  // right after the CURRENT ad closes (see proceedToPlay), while the
-  // overlay is hidden. By the time cooldown has passed and the user taps
-  // Play again, the fresh copy has usually already finished loading.
+  // ── Ad overlay (Monetag direct link, opened via in-app browser tab) ──
+  // adVisible: the "watch ad" prompt is up.
+  // adOpening: the in-app browser tab is being opened / is open — disables
+  //   the button so it can't be double-tapped while we wait for it to close.
   const [adVisible, setAdVisible] = useState(false);
-  const [adReady, setAdReady] = useState(false);
-  const adWebViewRef = useRef(null);
+  const [adOpening, setAdOpening] = useState(false);
+
   const pendingPlayRef = useRef({ season: '1', episode: '1' });
-
-  // Per-session cooldown so rapid repeat Play taps can't spam-reload the
-  // ad and fire multiple impressions in quick succession.
   const lastAdShownRef = useRef(0);
-  const AD_COOLDOWN_MS = 60000; // 60s between ad impressions
 
-  // Mirrors `closeCountdown` state, but read synchronously inside the
-  // hardwareBackPress / beforeRemove handlers below, which are registered
-  // once per `adVisible` toggle. Reading a ref instead of closed-over
-  // state means the handlers always see the live countdown value.
-  const closeCountdownRef = useRef(15);
-
-  useEffect(() => {
-    console.log('[Details] route.params:', params);
-  }, [params]);
 
   useEffect(() => {
     if (id == null || type == null) {
@@ -181,44 +163,25 @@ export default function DetailsScreen() {
   };
 
   // ── Android hardware back ───────────────────────────────────────────
-  // Consumes the hardware back press while the ad is up and the
-  // countdown hasn't finished. This alone is NOT enough — see the
-  // `beforeRemove` listener below for why.
+  // Swallowed while our ad prompt overlay is up. (The in-app browser tab
+  // itself, once opened, has its own close button and isn't affected by
+  // this — it's a native modal, not part of our view hierarchy.)
   useEffect(() => {
     if (!adVisible) return undefined;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (closeCountdownRef.current > 0) {
-        return true; // swallow — ad stays up
-      }
-      proceedToPlay();
-      return true;
-    });
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
     return () => sub.remove();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adVisible]);
 
-  // ── Universal back-navigation guard ─────────────────────────────────
-  // `BackHandler` only covers Android's hardware back button. It does
-  // NOT cover:
-  //   - iOS's edge-swipe-back gesture
-  //   - Android's edge-swipe-back gesture (if gestureEnabled)
-  //   - the header's own back chevron Pressable calling navigation.goBack()
-  // All of those go straight through React Navigation's internal
-  // goBack()/pop(), which fires `beforeRemove` right before the screen is
-  // actually removed. Listening here and calling `e.preventDefault()`
-  // blocks the navigation itself — this is what was letting users skip
-  // the ad by swiping back instead of using the hardware/OS back button.
+  // ── Universal back-navigation guard (swipe-back, header back, etc.) ──
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      if (!adVisible) return; // no ad up, allow normal navigation
-      if (closeCountdownRef.current === 0) return; // countdown done, allow
+      if (!adVisible) return; // no prompt up, allow normal navigation
       e.preventDefault();
     });
     return unsubscribe;
   }, [navigation, adVisible]);
 
-  // Also disable the swipe gesture outright while the ad is up, so users
-  // don't even get a half-swipe visual glitch before being blocked.
+  // Also disable the swipe gesture outright while the prompt is up.
   useEffect(() => {
     navigation.setOptions({ gestureEnabled: !adVisible });
   }, [navigation, adVisible]);
@@ -243,14 +206,12 @@ export default function DetailsScreen() {
     }
 
     lastAdShownRef.current = now;
-    // No reload() here anymore — whatever is currently loaded in the
-    // WebView (either the initial mount load, or the background refresh
-    // kicked off after the previous ad closed) is shown immediately.
     setAdVisible(true);
   };
 
   const proceedToPlay = async () => {
     setAdVisible(false);
+    setAdOpening(false);
     const { season, episode } = pendingPlayRef.current;
 
     if (id == null || type == null) {
@@ -268,30 +229,23 @@ export default function DetailsScreen() {
       console.error("Couldn't update recently-watched:", err);
     }
 
-    // Prep a fresh copy of the ad in the background, hidden, so it's
-    // (hopefully) already loaded by the time the user taps Play again.
-    // This is the part that used to happen synchronously at tap-time —
-    // moving it here is what actually fixes the "feels slow" complaint.
-    setAdReady(false);
-    adWebViewRef.current?.reload();
-
     navigation.navigate('Stream', { id, type, season, episode });
   };
 
-  useEffect(() => {
-    if (!adVisible) return undefined;
-    setCloseCountdown(15);
-    closeCountdownRef.current = 15;
-    const interval = setInterval(() => {
-      setCloseCountdown((prev) => {
-        const next = prev <= 1 ? 0 : prev - 1;
-        closeCountdownRef.current = next;
-        if (next === 0) clearInterval(interval);
-        return next;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [adVisible]);
+  const handleAcceptAd = async () => {
+    setAdOpening(true);
+    try {
+      // Opens Chrome Custom Tabs (Android) / SFSafariViewController (iOS):
+      // a real browser instance shown as an in-app modal with its own
+      // close button. The promise resolves the moment it's dismissed —
+      // whether the user closed it manually or a redirect chain finished.
+      await WebBrowser.openBrowserAsync(AD_URL);
+    } catch (err) {
+      console.error('Failed to open ad URL:', err);
+    } finally {
+      proceedToPlay();
+    }
+  };
 
   const handleWishlist = async () => {
     const body = {
@@ -460,6 +414,7 @@ export default function DetailsScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
+      {/* Ad prompt overlay */}
       <View
         pointerEvents={adVisible ? 'auto' : 'none'}
         style={{
@@ -468,69 +423,54 @@ export default function DetailsScreen() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: '#000',
+          backgroundColor: 'rgba(0,0,0,0.92)',
           paddingTop: insets.top,
           opacity: adVisible ? 1 : 0,
           zIndex: adVisible ? 20 : -1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingHorizontal: 24,
         }}
       >
-        <WebView
-          ref={adWebViewRef}
-          source={{ uri: AD_URL }}
-          style={{ flex: 1, backgroundColor: '#000' }}
-          containerStyle={{ backgroundColor: '#000' }}
-          startInLoadingState
-          onLoadEnd={() => setAdReady(true)}
-          cacheEnabled
-          cacheMode="LOAD_DEFAULT"
-          domStorageEnabled
-          javaScriptEnabled
-          sharedCookiesEnabled
-          thirdPartyCookiesEnabled
-          allowsInlineMediaPlayback
-          mediaPlaybackRequiresUserAction={false}
-          mixedContentMode="always"
-          renderLoading={() => (
-            <View
-              style={{
-                flex: 1,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: '#000',
-              }}
-            >
-              <ActivityIndicator color={colors.marquee} />
-            </View>
-          )}
-        />
-
-        <Pressable
-          onPress={closeCountdown === 0 ? proceedToPlay : undefined}
-          disabled={closeCountdown > 0}
-          hitSlop={10}
+        <Text
           style={{
-            position: 'absolute',
-            top: insets.top + 10,
-            right: 16,
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(20,20,20,0.85)',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.4,
-            shadowRadius: 4,
-            elevation: 6,
+            fontFamily: 'BebasNeue_400Regular',
+            fontSize: 24,
+            color: '#fff',
+            textAlign: 'center',
           }}
         >
-          {closeCountdown > 0 ? (
-            <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold', fontSize: 14 }}>
-              {closeCountdown}
-            </Text>
+          This content is ad-supported
+        </Text>
+        <Text
+          style={{
+            marginTop: 8,
+            fontFamily: 'Inter_400Regular',
+            fontSize: 13,
+            color: 'rgba(255,255,255,0.7)',
+            textAlign: 'center',
+          }}
+        >
+          Watch a quick ad to continue to your video.
+        </Text>
+
+        <Pressable
+          onPress={adOpening ? undefined : handleAcceptAd}
+          disabled={adOpening}
+          className="rounded-full py-3.5 px-8 mt-6"
+          style={{
+            backgroundColor: colors.marquee,
+            minWidth: 200,
+            alignItems: 'center',
+            opacity: adOpening ? 0.6 : 1,
+          }}
+        >
+          {adOpening ? (
+            <ActivityIndicator size="small" color={colors.bg} />
           ) : (
-            <Feather name="x" size={18} color="#fff" />
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.bg }}>
+              Watch Ad & Continue
+            </Text>
           )}
         </Pressable>
       </View>

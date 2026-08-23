@@ -47,30 +47,41 @@ const ROWS = [
     endpoint: '/3/movie/now_playing?language=en-US&page=1',
   },
   {
-    key: 'upcoming',
-    title: 'Upcoming',
-    type: 'movie',
-    endpoint: '/3/movie/upcoming?language=en-US&page=1',
-    render: 'trailer',
-  },
-  {
-    key: 'anime',
-    title: 'Anime',
+    key: 'netflix',
+    title: 'Netflix',
     eyebrow: '06',
-    type: 'tv',
-    endpoint: '/3/discover/tv?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=16&with_origin_country=JP',
+    type: 'movie',
+    endpoint:
+      '/3/discover/movie?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_watch_providers=8&watch_region=US',
   },
   {
-    key: 'action',
-    title: 'Action',
+    key: 'prime',
+    title: 'Prime Video',
     eyebrow: '07',
     type: 'movie',
-    endpoint: '/3/discover/movie?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=28',
+    endpoint:
+      '/3/discover/movie?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_watch_providers=119&watch_region=US',
+  },
+  {
+    key: 'disneyPlus',
+    title: 'Disney+',
+    eyebrow: '08',
+    type: 'movie',
+    endpoint:
+      '/3/discover/movie?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_watch_providers=337&watch_region=US',
+  },
+  {
+    key: 'appleTv',
+    title: 'Apple TV+',
+    eyebrow: '09',
+    type: 'movie',
+    endpoint:
+      '/3/discover/movie?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_watch_providers=350&watch_region=US',
   },
   {
     key: 'topRated',
     title: 'Top Rated',
-    eyebrow: '08',
+    eyebrow: '10',
     type: 'movie',
     endpoint: '/3/movie/top_rated?language=en-US&page=1',
   },

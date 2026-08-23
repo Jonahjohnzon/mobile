@@ -30,7 +30,7 @@ const HeroBanner = ({ items = [], onPressPlay, onPressInfo }) => {
   const imageBase = process.env.EXPO_PUBLIC_SIZEIMAGEPHONE;
   const backdrop = movie.backdrop_path ? `${imageBase}${movie.backdrop_path}` : null;
   const title = movie.title || movie.name || movie.original_name;
-
+  
   return (
     <View style={{ width, height: width * 1.15 }}>
       {backdrop ? (
