@@ -48,10 +48,12 @@
       }
     },
     "updates": {
-      "url": "https://u.expo.dev/4bfad794-001f-4bb6-990d-e3c59829ccd8"
+      "url": "https://u.expo.dev/4bfad794-001f-4bb6-990d-e3c59829ccd8",
+      "checkAutomatically": "ON_ERROR_RECOVERY"
     },
     "plugins": [
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-updates"
     ]
   }
 }

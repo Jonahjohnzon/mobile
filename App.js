@@ -7,6 +7,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Updates from 'expo-updates';
 import { useFonts, BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import {
   Inter_400Regular,
@@ -19,6 +20,24 @@ import { colors, navTheme } from './src/constants/theme';
 import { checkAuth } from './src/lib/authCheck';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+async function checkForOtaUpdate() {
+  // No-op in Expo Go / dev builds — updates only work in release builds
+  if (__DEV__ || !Updates.isEnabled) return;
+
+  try {
+    const update = await Updates.checkForUpdateAsync();
+    if (update.isAvailable) {
+      await Updates.fetchUpdateAsync();
+      // Reload immediately so the new JS bundle is applied right away.
+      // If you'd rather prompt the user first, swap this for a confirm dialog.
+      await Updates.reloadAsync();
+    }
+  } catch (e) {
+    // Fail silently — don't block app usage if the update check fails
+    console.log('OTA update check failed:', e);
+  }
+}
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -41,13 +60,17 @@ export default function App() {
   }, [ready]);
 
   useEffect(() => {
-    if (ready) checkAuth();
+    if (ready) {
+      checkAuth();
+      checkForOtaUpdate();
+    }
   }, [ready]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (appState.current.match(/inactive|background/) && nextState === 'active') {
         checkAuth();
+        checkForOtaUpdate();
       }
       appState.current = nextState;
     });
