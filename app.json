@@ -53,6 +53,7 @@
     },
     "plugins": [
       "expo-web-browser",
+      "./plugins/withAdiRegistration.js",
       "expo-updates"
     ]
   }
