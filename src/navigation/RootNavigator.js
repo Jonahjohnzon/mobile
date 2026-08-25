@@ -3,6 +3,7 @@ import { View, Image } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import { useSnapshot } from 'valtio';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeScreen from '../screens/HomeScreen';
 import SearchScreen from '../screens/SearchScreen';
 import BrowseScreen from '../screens/BrowseScreen';
@@ -68,6 +69,7 @@ const TabIcon = ({ name, focused, isProfile, loggedIn }) => {
 
 export default function RootNavigator() {
   const snap = useSnapshot(state);
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -78,7 +80,8 @@ export default function RootNavigator() {
           backgroundColor: colors.surface,
           borderTopWidth: 1,
           borderTopColor: colors.line,
-          height: 60,
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
         },
         tabBarItemStyle: { paddingTop: 8 },
       }}
