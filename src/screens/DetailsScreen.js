@@ -32,7 +32,7 @@ import { colors } from '../constants/theme';
 // instance in an in-app modal with its own close button, rather than
 // exiting to Chrome or being embedded in a scriptable WebView.
 const AD_URL = 'https://omg10.com/4/11569591';
-const AD_COOLDOWN_MS = 60000; // 60s between ad impressions per session
+const AD_COOLDOWN_MS = 10000; // 60s between ad impressions per session
 
 const WishlistButton = ({ onPress, loading, added }) => {
   if (added) {
