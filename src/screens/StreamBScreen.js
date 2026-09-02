@@ -271,8 +271,8 @@ export default function StreamBScreen() {
       ? [
               {
             Name: "BACKUP-SERVER",
-            scrMovie: `https://player.videasy.net/movie/${id}`,
-            scrSeries: `https://player.videasy.net/tv/${id}/${season}/${episode}`,
+            scrMovie: `https://www.vidy.st/movie/${id}?color=DC2626`,
+            scrSeries: `https://www.vidy.st/tv/${id}/${season}/${episode}?color=DC2626`,
             scrAnimeMovie: `https://player.videasy.net/anime/anilist_id`,
             scrAnimeSeries: `https://player.videasy.net/anime/anilist_id/${episode}`,
             id: 1,
