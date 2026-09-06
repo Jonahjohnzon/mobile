@@ -165,62 +165,100 @@ export default function DScreen() {
   const isSeries = seasons.length > 0 && !!currentSeasonEntry && selectedSeason !== 0;
 
   const handleDownload = async (source) => {
-    if (!source?.url) {
-      Alert.alert('No download link', `No URL is available for ${source?.resolution ?? 'this quality'} yet.`);
-      return;
-    }
+  if (!source?.url) {
+    Alert.alert('No download link', 'No URL is available.');
+    return;
+  }
 
-    const { status } = await MediaLibrary.requestPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow photo/media library access to save the video.');
-      return;
-    }
+  const { status } = await MediaLibrary.requestPermissionsAsync();
 
-    const filename = `${match?.slug || match?.name || 'video'}-${source.resolution}.${(source.format || 'mp4').toLowerCase()}`;
-    // Download to a private temp location first, then hand it to
-    // MediaLibrary — content:// gallery URIs aren't valid download targets.
-    const tempDest = FileSystem.cacheDirectory + filename;
+  if (status !== 'granted') {
+    Alert.alert(
+      'Permission needed',
+      'Allow media library access to save the video.'
+    );
+    return;
+  }
 
-    setDownloadingRes(source.resolution);
-    setDownloadProgress(0);
-    try {
-      const downloadResumable = FileSystem.createDownloadResumable(
-        source.url,
-        tempDest,
-        {},
-        (progress) => {
-          const pct = progress.totalBytesExpectedToWrite
-            ? progress.totalBytesWritten / progress.totalBytesExpectedToWrite
-            : 0;
-          setDownloadProgress(pct);
+  const safeName = (match?.slug || match?.name || 'video')
+    .replace(/[^a-zA-Z0-9_-]/g, '_');
+
+  const filename = `${safeName}-${source.resolution}.mp4`;
+  const tempDest = FileSystem.cacheDirectory + filename;
+
+  setDownloadingRes(source.resolution);
+  setDownloadProgress(0);
+
+  try {
+
+    const downloadResumable = FileSystem.createDownloadResumable(
+      source.url,
+      tempDest,
+      {
+        headers: {
+          Accept: 'video/mp4,video/*,*/*',
+        },
+      },
+      (progress) => {
+        if (progress.totalBytesExpectedToWrite > 0) {
+          setDownloadProgress(
+            progress.totalBytesWritten /
+            progress.totalBytesExpectedToWrite
+          );
         }
-      );
-      const result = await downloadResumable.downloadAsync();
-      console.log('[DScreen] download complete:', result?.uri);
-
-      const asset = await MediaLibrary.createAssetAsync(result.uri);
-      // Group saved videos into their own album instead of dumping loose
-      // files into the top-level camera roll.
-      const albumName = 'Silo';
-      const existingAlbum = await MediaLibrary.getAlbumAsync(albumName);
-      if (existingAlbum) {
-        await MediaLibrary.addAssetsToAlbumAsync([asset], existingAlbum, false);
-      } else {
-        await MediaLibrary.createAlbumAsync(albumName, asset, false);
       }
+    );
 
-      // Clean up the temp copy now that it's safely in the gallery.
-      await FileSystem.deleteAsync(result.uri, { idempotent: true });
+    const result = await downloadResumable.downloadAsync();
 
-      Alert.alert('Download complete', `Saved ${source.resolution} to your Photos/Gallery (${albumName} album).`);
-    } catch (err) {
-      console.error('[DScreen] Download failed:', err);
-      Alert.alert('Download failed', err?.message || 'Something went wrong.');
-    } finally {
-      setDownloadingRes(null);
-      setDownloadProgress(0);
+
+    const info = await FileSystem.getInfoAsync(result.uri);
+
+    if (!info.exists || info.size < 100000) {
+      throw new Error(
+        `Downloaded file is invalid: ${info.size || 0} bytes`
+      );
     }
-  };
+
+    const asset = await MediaLibrary.createAssetAsync(result.uri);
+
+    const albumName = 'Silo';
+    const album = await MediaLibrary.getAlbumAsync(albumName);
+
+    if (album) {
+      await MediaLibrary.addAssetsToAlbumAsync(
+        [asset],
+        album,
+        false
+      );
+    } else {
+      await MediaLibrary.createAlbumAsync(
+        albumName,
+        asset,
+        false
+      );
+    }
+
+    await FileSystem.deleteAsync(result.uri, {
+      idempotent: true,
+    });
+
+    Alert.alert(
+      'Download complete',
+      `Saved ${source.resolution} to ${albumName}.`
+    );
+
+  } catch (err) {
+    console.error('[DOWNLOAD] FAILED:', err);
+    Alert.alert(
+      'Download failed',
+      err?.message || 'Something went wrong.'
+    );
+  } finally {
+    setDownloadingRes(null);
+    setDownloadProgress(0);
+  }
+};
 
   return (
     <View className="flex-1 bg-bg">

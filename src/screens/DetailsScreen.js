@@ -521,7 +521,7 @@ export default function DetailsScreen() {
             <>
               <Feather name="play-circle" size={16} color="#fff" />
               <Text className="ml-2" style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>
-                Watch Ad &Download
+                Watch Ad & Download
               </Text>
             </>
           )}
