@@ -95,7 +95,9 @@ export default function DetailsScreen() {
   const [adVisible, setAdVisible] = useState(false);
   const [adOpening, setAdOpening] = useState(false);
 
-  const pendingPlayRef = useRef({ season: '1', episode: '1' });
+  // target: which screen proceedToPlay should navigate to once the ad
+  // gate is satisfied — 'Stream' (default source) or 'DStream' (alt source).
+  const pendingPlayRef = useRef({ season: '1', episode: '1', target: 'Stream' });
   const lastAdShownRef = useRef(0);
 
   useEffect(() => {
@@ -185,7 +187,8 @@ export default function DetailsScreen() {
     navigation.setOptions({ gestureEnabled: !adVisible });
   }, [navigation, adVisible]);
 
-  const handlePlay = (season = '1', episode = '1') => {
+  // target: 'Stream' (default) or 'DStream' (alt source button)
+  const handlePlay = (season = '1', episode = '1', target = 'Stream') => {
     if (id == null || type == null) {
       console.warn('[Details] handlePlay called without valid id/type, aborting:', { id, type });
       return;
@@ -194,7 +197,7 @@ export default function DetailsScreen() {
       console.warn('[Details] handlePlay called without valid season/episode, aborting:', { season, episode });
       return;
     }
-    pendingPlayRef.current = { season: String(season), episode: String(episode) };
+    pendingPlayRef.current = { season: String(season), episode: String(episode), target };
 
     const now = Date.now();
     const withinCooldown = now - lastAdShownRef.current < AD_COOLDOWN_MS;
@@ -207,10 +210,11 @@ export default function DetailsScreen() {
     setAdVisible(true);
   };
 
-  const proceedToPlay = async () => {
+  const proceedToPlay = async (overrideTarget) => {
     setAdVisible(false);
     setAdOpening(false);
-    const { season, episode } = pendingPlayRef.current;
+    const { season, episode, target: pendingTarget } = pendingPlayRef.current;
+    const target = overrideTarget || pendingTarget;
 
     if (id == null || type == null) {
       console.warn('[Details] proceedToPlay: missing id/type, not navigating:', { id, type });
@@ -227,7 +231,7 @@ export default function DetailsScreen() {
       console.error("Couldn't update recently-watched:", err);
     }
 
-    navigation.navigate('Stream', { id, type, season, episode });
+    navigation.navigate(target, { id, type, season, episode });
   };
 
   const handleAcceptAd = async () => {
@@ -246,6 +250,23 @@ export default function DetailsScreen() {
       console.error('Failed to open ad URL:', err);
     } finally {
       proceedToPlay();
+    }
+  };
+
+  // Alt-source option, now surfaced inside the ad prompt itself (under
+  // "Watch Ad & Continue") rather than as its own button on the page.
+  // Same ad-gate as the default source — opens the ad tab, then navigates
+  // to the D-source screen (DScreen route registered as 'DStream') with
+  // the params handlePlay already stashed in pendingPlayRef.
+  const handleGoToDSource = async () => {
+    setAdOpening(true);
+    lastAdShownRef.current = Date.now();
+    try {
+      await WebBrowser.openBrowserAsync(AD_URL);
+    } catch (err) {
+      console.error('Failed to open ad URL:', err);
+    } finally {
+      proceedToPlay('DStream');
     }
   };
 
@@ -354,7 +375,7 @@ export default function DetailsScreen() {
           </View>
 
           <Pressable
-            onPress={() => handlePlay()}
+            onPress={() => handlePlay('1', '1', 'Stream')}
             className="flex-row items-center justify-center rounded-full py-3.5 mt-4"
             style={{ backgroundColor: colors.marquee }}
           >
@@ -401,7 +422,7 @@ export default function DetailsScreen() {
                     console.warn('[Details] Episode missing episode_number, ignoring tap:', ep);
                     return;
                   }
-                  handlePlay(selectedSeason, ep.episode_number);
+                  handlePlay(selectedSeason, ep.episode_number, 'Stream');
                 }}
               />
             )}
@@ -479,6 +500,30 @@ export default function DetailsScreen() {
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.bg }}>
               Watch Ad & Continue
             </Text>
+          )}
+        </Pressable>
+
+        <Pressable
+          onPress={adOpening ? undefined : handleGoToDSource}
+          disabled={adOpening}
+          className="flex-row items-center justify-center rounded-full py-3.5 px-8 mt-3"
+          style={{
+            backgroundColor: 'transparent',
+            borderWidth: 1,
+            borderColor: colors.marqueeDim,
+            minWidth: 200,
+            opacity: adOpening ? 0.4 : 1,
+          }}
+        >
+          {adOpening ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Feather name="play-circle" size={16} color="#fff" />
+              <Text className="ml-2" style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>
+                D (Source)
+              </Text>
+            </>
           )}
         </Pressable>
 

@@ -5,7 +5,7 @@ import DetailsScreen from '../screens/DetailsScreen';
 import BrowseScreen from '../screens/BrowseScreen';
 import ActorScreen from '../screens/ActorScreen';
 import StreamScreen from '../screens/StreamScreen';
-import TelestreamScreen from '../screens/TelestreamScreen';
+import DScreen from '../screens/DScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import WishlistScreen from '../screens/WishlistScreen';
 import LoginScreen from '../screens/LoginScreen';
@@ -28,6 +28,7 @@ export default function AppNavigator() {
       <Stack.Screen name="SignUp" component={SignUpScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="Stream" component={StreamScreen} options={{ presentation: 'fullScreenModal' }} />
       <Stack.Screen name="BStream" component={StreamBScreen} options={{ presentation: 'fullScreenModal' }} />
+      <Stack.Screen name="DStream" component={DScreen} options={{ presentation: 'card' }} />
     </Stack.Navigator>
   );
 }
