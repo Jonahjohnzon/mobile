@@ -3,6 +3,7 @@ import { View, Text, Image, Pressable, ActivityIndicator, ScrollView, Alert } fr
 import { Feather } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
 import { api } from '../api/ApiCore';
 import { colors } from '../constants/theme';
 
@@ -168,15 +169,24 @@ export default function DScreen() {
       Alert.alert('No download link', `No URL is available for ${source?.resolution ?? 'this quality'} yet.`);
       return;
     }
+
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow photo/media library access to save the video.');
+      return;
+    }
+
     const filename = `${match?.slug || match?.name || 'video'}-${source.resolution}.${(source.format || 'mp4').toLowerCase()}`;
-    const dest = FileSystem.documentDirectory + filename;
+    // Download to a private temp location first, then hand it to
+    // MediaLibrary — content:// gallery URIs aren't valid download targets.
+    const tempDest = FileSystem.cacheDirectory + filename;
 
     setDownloadingRes(source.resolution);
     setDownloadProgress(0);
     try {
       const downloadResumable = FileSystem.createDownloadResumable(
         source.url,
-        dest,
+        tempDest,
         {},
         (progress) => {
           const pct = progress.totalBytesExpectedToWrite
@@ -187,7 +197,22 @@ export default function DScreen() {
       );
       const result = await downloadResumable.downloadAsync();
       console.log('[DScreen] download complete:', result?.uri);
-      Alert.alert('Download complete', `Saved ${source.resolution} to app storage.`);
+
+      const asset = await MediaLibrary.createAssetAsync(result.uri);
+      // Group saved videos into their own album instead of dumping loose
+      // files into the top-level camera roll.
+      const albumName = 'Silo';
+      const existingAlbum = await MediaLibrary.getAlbumAsync(albumName);
+      if (existingAlbum) {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], existingAlbum, false);
+      } else {
+        await MediaLibrary.createAlbumAsync(albumName, asset, false);
+      }
+
+      // Clean up the temp copy now that it's safely in the gallery.
+      await FileSystem.deleteAsync(result.uri, { idempotent: true });
+
+      Alert.alert('Download complete', `Saved ${source.resolution} to your Photos/Gallery (${albumName} album).`);
     } catch (err) {
       console.error('[DScreen] Download failed:', err);
       Alert.alert('Download failed', err?.message || 'Something went wrong.');

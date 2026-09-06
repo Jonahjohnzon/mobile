@@ -498,7 +498,7 @@ export default function DetailsScreen() {
             <ActivityIndicator size="small" color={colors.bg} />
           ) : (
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.bg }}>
-              Watch Ad & Continue
+              Watch Ad & Stream
             </Text>
           )}
         </Pressable>
@@ -521,7 +521,7 @@ export default function DetailsScreen() {
             <>
               <Feather name="play-circle" size={16} color="#fff" />
               <Text className="ml-2" style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>
-                D (Source)
+                Watch Ad &Download
               </Text>
             </>
           )}
