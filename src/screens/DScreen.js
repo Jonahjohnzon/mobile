@@ -152,53 +152,85 @@ export default function DScreen() {
         const items = soData?.items ?? [];
 
         const titleNorm = norm(resolvedTitle);
-        // TV entries are frequently suffixed ("S1-S6", "[English]"), so a
-        // startsWith check catches them; movies are usually the bare title.
-        let candidates =
-          type === 'tv'
-            ? items.filter((it) => norm(it.name).startsWith(titleNorm))
-            : items.filter((it) => norm(it.name) === titleNorm);
-        if (!candidates.length) {
-          candidates = items.filter((it) => norm(it.name).includes(titleNorm));
-        }
-        if (!candidates.length) candidates = items;
 
-        // Cap how many we probe with a detail call, to avoid a request storm
-        // on a very generic title.
-        const capped = candidates.slice(0, 6);
+      function getTitleScore(candidateTitle) {
+          const candidateNorm = norm(candidateTitle);
 
-        const detailResults = await Promise.allSettled(
-          capped.map((c) =>
-            fetch(`https://api.screenopps.com/detail/${c.slug}`).then((r) => r.json())
+          if (candidateNorm === titleNorm) {
+              return 100;
+          }
+
+          // TV titles may have suffixes such as S1-S6 or [English]
+          if (type === 'tv' && candidateNorm.startsWith(titleNorm)) {
+              return 80;
+          }
+
+          if (candidateNorm.includes(titleNorm)) {
+              return 50;
+          }
+
+          if (titleNorm.includes(candidateNorm)) {
+              return 40;
+          }
+
+          return 0;
+      }
+
+      const candidates = items
+          .map(item => ({
+              item,
+              titleScore: getTitleScore(item.name)
+          }))
+          .filter(x => x.titleScore > 0)
+          .sort((a, b) => b.titleScore - a.titleScore)
+          .slice(0, 6);
+
+      const detailResults = await Promise.allSettled(
+          candidates.map(({ item }) =>
+              fetch(
+                  `https://api.screenopps.com/detail/${encodeURIComponent(item.slug)}`
+              ).then(r => r.json())
           )
-        );
+      );
 
-        let best = null;
-        let bestScore = -Infinity;
-        detailResults.forEach((res, idx) => {
-          if (res.status !== 'fulfilled') return;
-          const subj = res.value?.data?.subject;
-          if (!subj || subj.subjectType !== expectedSubjectType) return;
-          const candidateSeasons = res.value?.data?.resource?.seasons ?? [];
-          const score =
-            type === 'tv' && tmdbSeasonCount
-              ? -Math.abs(candidateSeasons.length - tmdbSeasonCount)
-              : 0;
+      let best = null;
+      let bestScore = -Infinity;
+
+      detailResults.forEach((result, idx) => {
+          if (result.status !== 'fulfilled') return;
+
+          const detail = result.value?.data;
+          const subj = detail?.subject;
+
+          if (!subj) return;
+
+          // Strongly prefer the correct media type
+          if (subj.subjectType !== expectedSubjectType) return;
+
+          const candidate = candidates[idx];
+
+          let score = candidate.titleScore;
+
+          // TV: compare number of seasons
+          if (type === 'tv' && tmdbSeasonCount) {
+              const seasons = detail?.resource?.seasons ?? [];
+
+              if (seasons.length === tmdbSeasonCount) {
+                  score += 50;
+              } else {
+                  score -= Math.abs(seasons.length - tmdbSeasonCount) * 10;
+              }
+          }
+
           if (score > bestScore) {
-            bestScore = score;
-            best = { item: capped[idx], detail: res.value.data };
-          }
-        });
+              bestScore = score;
 
-        // Nothing matched subjectType — fall back to the first candidate we
-        // could actually fetch detail for, so we still show *something*.
-        if (!best) {
-          const firstOk = detailResults.find((r) => r.status === 'fulfilled' && r.value?.data);
-          if (firstOk) {
-            const idx = detailResults.indexOf(firstOk);
-            best = { item: capped[idx], detail: firstOk.value.data };
+              best = {
+                  item: candidate.item,
+                  detail
+              };
           }
-        }
+            });
 
         if (cancelled || !best) return;
         setMatch(best.item);
