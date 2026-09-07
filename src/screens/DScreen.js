@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Image, Pressable, ActivityIndicator, ScrollView, Modal } from 'react-native';
+import { View, Text, Image, Pressable, ActivityIndicator, ScrollView, Modal, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { api } from '../api/ApiCore';
 import { colors } from '../constants/theme';
+
+const { StorageAccessFramework } = FileSystem;
 
 function formatBytes(bytes) {
   const n = Number(bytes);
@@ -16,6 +18,39 @@ function formatBytes(bytes) {
 }
 
 const norm = (s) => (s || '').trim().toLowerCase();
+
+// --- Android "save to Downloads" helpers -----------------------------------
+// SAF requires the user to grant folder access once via a system picker
+// (they can navigate to and select "Download"). We cache the granted
+// directoryUri in module scope so subsequent downloads in this app session
+// don't re-prompt. If you want it to survive app restarts, persist
+// `cachedDirUri` with AsyncStorage/SecureStore instead.
+let cachedDirUri = null;
+
+async function getDownloadDirUri() {
+  if (cachedDirUri) return cachedDirUri;
+  const perm = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+  if (!perm.granted) return null;
+  cachedDirUri = perm.directoryUri;
+  return cachedDirUri;
+}
+
+// Copies a file already sitting in cache/document storage into the
+// user-picked SAF directory (e.g. Download). Goes through base64, so very
+// large video files will spend a moment buffering in memory — fine for
+// typical mobile-quality downloads, but if you start seeing OOM on big
+// files, swap this for a native streaming module instead.
+async function saveToSAF(sourceUri, filename, mimeType, dirUri) {
+  const destUri = await StorageAccessFramework.createFileAsync(dirUri, filename, mimeType);
+  const base64 = await FileSystem.readAsStringAsync(sourceUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  await FileSystem.writeAsStringAsync(destUri, base64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  return destUri;
+}
+// -----------------------------------------------------------------------------
 
 // RN port of the web app's /telestream?link=... route — the branch
 // PosterCard/LibraryScreen take when `data.media_type === 'telenovela'`.
@@ -205,15 +240,7 @@ export default function DScreen() {
       return;
     }
 
-    const { status } = await MediaLibrary.requestPermissionsAsync();
-
-    if (status !== 'granted') {
-      showMessage('Permission needed', 'Allow media library access to save the video.');
-      return;
-    }
-
     const safeName = (match?.slug || match?.name || 'video').replace(/[^a-zA-Z0-9_-]/g, '_');
-
     const filename = `${safeName}-${source.resolution}.mp4`;
     const tempDest = FileSystem.cacheDirectory + filename;
 
@@ -244,23 +271,40 @@ export default function DScreen() {
         throw new Error(`Downloaded file is invalid: ${info.size || 0} bytes`);
       }
 
-      const asset = await MediaLibrary.createAssetAsync(result.uri);
+      if (Platform.OS === 'android') {
+        // Android: hand the file to a user-picked SAF directory (e.g. the
+        // real "Download" folder) instead of the media library album, since
+        // that's what actually shows up in Files/Downloads apps.
+        const dirUri = await getDownloadDirUri();
+        if (!dirUri) {
+          throw new Error('Folder access was not granted, so the file could not be saved.');
+        }
 
-      const albumName = 'Silo';
-      const album = await MediaLibrary.getAlbumAsync(albumName);
+        const savedUri = await saveToSAF(result.uri, filename, 'video/mp4', dirUri);
+        await FileSystem.deleteAsync(result.uri, { idempotent: true });
 
-      if (album) {
-        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+        showMessage('Download complete', `Saved ${source.resolution}.\n\nPath: ${savedUri}`);
       } else {
-        await MediaLibrary.createAlbumAsync(albumName, asset, false);
+        // iOS has no public "Downloads" folder — Photos (via MediaLibrary)
+        // is the closest equivalent, so keep the original flow here.
+        const asset = await MediaLibrary.createAssetAsync(result.uri);
+
+        const albumName = 'Silo';
+        const album = await MediaLibrary.getAlbumAsync(albumName);
+
+        if (album) {
+          await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+        } else {
+          await MediaLibrary.createAlbumAsync(albumName, asset, false);
+        }
+
+        await FileSystem.deleteAsync(result.uri, { idempotent: true });
+
+        showMessage(
+          'Download complete',
+          `Saved ${source.resolution} to ${albumName}.\n\nPath: ${asset.uri}`
+        );
       }
-
-      await FileSystem.deleteAsync(result.uri, { idempotent: true });
-
-      showMessage(
-        'Download complete',
-        `Saved ${source.resolution} to ${albumName}.\n\nPath: ${asset.uri}`
-      );
     } catch (err) {
       console.error('[DOWNLOAD] FAILED:', err);
       showMessage('Download failed', err?.message || 'Something went wrong.');
@@ -270,10 +314,11 @@ export default function DScreen() {
     }
   };
 
-  // Subtitles aren't photos/videos, so MediaLibrary can't accept them —
-  // they're saved to the app's persistent document directory instead
-  // (survives restarts, unlike cacheDirectory) and the exact path is
-  // shown in the completion message so the user knows where to find it.
+  // Subtitles aren't photos/videos, so MediaLibrary can't accept them.
+  // Android: saved into the user-picked SAF directory (e.g. Download),
+  // same as video. iOS: saved to the app's persistent document directory
+  // (survives restarts, unlike cacheDirectory) — there's no public
+  // Downloads-folder equivalent to target there.
   const handleDownloadCaption = async (caption, idx) => {
     const label =
       typeof caption === 'string'
@@ -289,19 +334,41 @@ export default function DScreen() {
     const safeLabel = String(label).replace(/[^a-zA-Z0-9_-]/g, '_');
     const ext = url.split('.').pop().split('?')[0].slice(0, 5) || 'vtt';
     const filename = `${(match?.slug || match?.name || 'video').replace(/[^a-zA-Z0-9_-]/g, '_')}-${safeLabel}.${ext}`;
-    const dest = FileSystem.documentDirectory + filename;
 
     setDownloadingCaption(label);
     try {
-      const downloadResumable = FileSystem.createDownloadResumable(url, dest, {});
-      const result = await downloadResumable.downloadAsync();
+      if (Platform.OS === 'android') {
+        const tempDest = FileSystem.cacheDirectory + filename;
+        const downloadResumable = FileSystem.createDownloadResumable(url, tempDest, {});
+        const result = await downloadResumable.downloadAsync();
 
-      const info = await FileSystem.getInfoAsync(result.uri);
-      if (!info.exists) {
-        throw new Error('Downloaded subtitle file is missing.');
+        const info = await FileSystem.getInfoAsync(result.uri);
+        if (!info.exists) {
+          throw new Error('Downloaded subtitle file is missing.');
+        }
+
+        const dirUri = await getDownloadDirUri();
+        if (!dirUri) {
+          throw new Error('Folder access was not granted, so the file could not be saved.');
+        }
+
+        const mimeType = ext === 'srt' ? 'application/x-subrip' : 'text/vtt';
+        const savedUri = await saveToSAF(result.uri, filename, mimeType, dirUri);
+        await FileSystem.deleteAsync(result.uri, { idempotent: true });
+
+        showMessage('Download complete', `Saved ${label} subtitle.\n\nPath: ${savedUri}`);
+      } else {
+        const dest = FileSystem.documentDirectory + filename;
+        const downloadResumable = FileSystem.createDownloadResumable(url, dest, {});
+        const result = await downloadResumable.downloadAsync();
+
+        const info = await FileSystem.getInfoAsync(result.uri);
+        if (!info.exists) {
+          throw new Error('Downloaded subtitle file is missing.');
+        }
+
+        showMessage('Download complete', `Saved ${label} subtitle.\n\nPath: ${result.uri}`);
       }
-
-      showMessage('Download complete', `Saved ${label} subtitle.\n\nPath: ${result.uri}`);
     } catch (err) {
       console.error('[CAPTION DOWNLOAD] FAILED:', err);
       showMessage('Download failed', err?.message || 'Something went wrong.');
