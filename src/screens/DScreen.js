@@ -50,6 +50,45 @@ async function saveToSAF(sourceUri, filename, mimeType, dirUri) {
   });
   return destUri;
 }
+
+// Ensures we have MediaLibrary "add" permission before trying to save
+// anything into the gallery/album. `writeOnly: true` requests the
+// add-only permission (Android 10+ / iOS limited-add), which is all
+// createAssetAsync needs — no full photo-library read access required.
+// Returns true if granted, otherwise shows a message and returns false.
+async function ensureMediaLibraryPermission(showMessage) {
+  try {
+    const { status: existingStatus } = await MediaLibrary.getPermissionsAsync(true);
+    let finalStatus = existingStatus;
+
+    if (existingStatus !== 'granted') {
+      const { status, canAskAgain } = await MediaLibrary.requestPermissionsAsync(true);
+      finalStatus = status;
+
+      if (status !== 'granted' && !canAskAgain) {
+        showMessage(
+          'Permission needed',
+          'Saving videos requires access to your photos/media, and it looks like it was previously denied. Please enable it in your device Settings for this app.'
+        );
+        return false;
+      }
+    }
+
+    if (finalStatus !== 'granted') {
+      showMessage(
+        'Permission needed',
+        'Saving videos requires access to your photos/media. Please allow access to continue.'
+      );
+      return false;
+    }
+
+    return true;
+  } catch (permErr) {
+    console.error('[MEDIA PERMISSION] FAILED:', permErr);
+    showMessage('Permission error', permErr?.message || 'Could not check media permissions.');
+    return false;
+  }
+}
 // -----------------------------------------------------------------------------
 
 // RN port of the web app's /telestream?link=... route — the branch
@@ -271,6 +310,11 @@ export default function DScreen() {
       showMessage('No download link', 'No URL is available.');
       return;
     }
+
+    // Check/request MediaLibrary permission BEFORE downloading anything —
+    // no point burning bandwidth on a file we won't be able to save.
+    const hasPermission = await ensureMediaLibraryPermission(showMessage);
+    if (!hasPermission) return;
 
     const safeName = (match?.slug || match?.name || 'video').replace(/[^a-zA-Z0-9_-]/g, '_');
     const filename = `${safeName}-${source.resolution}.mp4`;

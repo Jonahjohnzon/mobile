@@ -54,7 +54,15 @@
     "plugins": [
       "expo-web-browser",
       "./plugins/withAdiRegistration.js",
-      "expo-updates"
+      "expo-updates",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Screenopps to save videos to your library.",
+          "savePhotosPermission": "Allow Screenopps to save videos to your library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
     ]
   }
 }
