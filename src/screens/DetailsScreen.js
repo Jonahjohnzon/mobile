@@ -384,7 +384,7 @@ export default function DetailsScreen() {
           >
             <Feather name="play" size={16} color={colors.bg} />
             <Text className="ml-2" style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.bg }}>
-              Play
+              Play/Download
             </Text>
           </Pressable>
 
