@@ -63,7 +63,7 @@ export default function DScreen() {
         `https://api.screenopps.com/api/stream/${item.subject_id}?detail_path=${item.slug}&se=${se}&ep=${ep}`
       );
       const streamData = await streamRes.json();
-      console.log('[DScreen] stream info result:', streamData);
+
       setStreamInfo(streamData);
     } catch (streamErr) {
       console.error('[DScreen] Failed to load stream info:', streamErr);
@@ -80,9 +80,6 @@ export default function DScreen() {
         `https://api.screenopps.com/api/stream/${item.subject_id}/captions?detail_path=${item.slug}&se=${se}&ep=${ep}`
       );
       const capData = await capRes.json();
-      console.log('[DScreen] captions result:', capData);
-      // Shape isn't confirmed yet — handle the likely possibilities: a bare
-      // array, or wrapped under `captions`/`subtitles`/`items`.
       const list = Array.isArray(capData)
         ? capData
         : capData?.captions ?? capData?.subtitles ?? capData?.items ?? [];
@@ -434,14 +431,14 @@ export default function DScreen() {
               </Text>
               {captions.map((c, idx) => {
                 const label =
-                  typeof c === 'string' ? c : c?.label || c?.lang || c?.language || `Subtitle ${idx + 1}`;
+                  typeof c === 'string' ? c : c?.lanName || c?.lan || c?.language || `Subtitle ${idx + 1}`;
                 const isThisDownloading = downloadingCaption === label;
                 return (
                   <Pressable
                     key={label + idx}
                     onPress={() => handleDownloadCaption(c, idx)}
                     disabled={isAnyDownloading}
-                    className="flex-row items-center justify-between rounded-2xl px-4 py-3 mb-2"
+                    className="flex-row items-center justify-between rounded-2xl px-4 py-5 mb-2"
                     style={{
                       backgroundColor: colors.surface,
                       opacity: isAnyDownloading ? (isThisDownloading ? 0.85 : 0.35) : 1,
