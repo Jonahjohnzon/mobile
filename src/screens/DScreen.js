@@ -32,17 +32,23 @@ export default function DScreen() {
   const [streamInfo, setStreamInfo] = useState(null);
   const [streamLoading, setStreamLoading] = useState(false);
 
+  // Subtitles for the current se/ep, from /api/stream/{subject_id}/captions.
+  const [captions, setCaptions] = useState([]);
+  const [captionsLoading, setCaptionsLoading] = useState(false);
+
   // Season/episode picker, driven off matchDetail.resource.seasons.
   const [seasons, setSeasons] = useState([]); // [{se, maxEp, resolutions}]
   const [selectedSeason, setSelectedSeason] = useState(null); // the `se` value
   const [selectedEpisode, setSelectedEpisode] = useState(1);
 
   // Which resolution is currently downloading, and its progress 0-1.
-  // Non-null means a download is in flight — ALL resolution buttons should
-  // disable while this is set, not just the one that was tapped.
+  // Which caption label is currently downloading, if any.
+  // Non-null in either means a download is in flight — ALL video AND
+  // caption buttons should disable while one is set, not just the tapped one.
   const [downloadingRes, setDownloadingRes] = useState(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
-  const isAnyDownloading = downloadingRes !== null;
+  const [downloadingCaption, setDownloadingCaption] = useState(null);
+  const isAnyDownloading = downloadingRes !== null || downloadingCaption !== null;
 
   // In-app message modal — replaces native Alert for success/error/
   // permission messages so it stays consistent with the rest of the UI.
@@ -64,6 +70,28 @@ export default function DScreen() {
       setStreamInfo(null);
     } finally {
       setStreamLoading(false);
+    }
+  };
+
+  const fetchCaptions = async (item, se, ep) => {
+    setCaptionsLoading(true);
+    try {
+      const capRes = await fetch(
+        `https://api.screenopps.com/api/stream/${item.subject_id}/captions?detail_path=${item.slug}&se=${se}&ep=${ep}`
+      );
+      const capData = await capRes.json();
+      console.log('[DScreen] captions result:', capData);
+      // Shape isn't confirmed yet — handle the likely possibilities: a bare
+      // array, or wrapped under `captions`/`subtitles`/`items`.
+      const list = Array.isArray(capData)
+        ? capData
+        : capData?.captions ?? capData?.subtitles ?? capData?.items ?? [];
+      setCaptions(list);
+    } catch (capErr) {
+      console.error('[DScreen] Failed to load captions:', capErr);
+      setCaptions([]);
+    } finally {
+      setCaptionsLoading(false);
     }
   };
 
@@ -156,6 +184,7 @@ export default function DScreen() {
         setSelectedEpisode(initialEp);
 
         await fetchStream(best.item, seasonEntry.se, initialEp);
+        fetchCaptions(best.item, seasonEntry.se, initialEp);
       } catch (err) {
         console.error('[DScreen] Failed to load title/stream:', err);
         if (!cancelled) setTitle(null);
@@ -220,7 +249,7 @@ export default function DScreen() {
 
       const asset = await MediaLibrary.createAssetAsync(result.uri);
 
-      const albumName = 'Gallery';
+      const albumName = 'Silo';
       const album = await MediaLibrary.getAlbumAsync(albumName);
 
       if (album) {
@@ -231,13 +260,56 @@ export default function DScreen() {
 
       await FileSystem.deleteAsync(result.uri, { idempotent: true });
 
-      showMessage('Download complete', `Saved to ${albumName}.`);
+      showMessage(
+        'Download complete',
+        `Saved ${source.resolution} to ${albumName}.\n\nPath: ${asset.uri}`
+      );
     } catch (err) {
       console.error('[DOWNLOAD] FAILED:', err);
       showMessage('Download failed', err?.message || 'Something went wrong.');
     } finally {
       setDownloadingRes(null);
       setDownloadProgress(0);
+    }
+  };
+
+  // Subtitles aren't photos/videos, so MediaLibrary can't accept them —
+  // they're saved to the app's persistent document directory instead
+  // (survives restarts, unlike cacheDirectory) and the exact path is
+  // shown in the completion message so the user knows where to find it.
+  const handleDownloadCaption = async (caption, idx) => {
+    const label =
+      typeof caption === 'string'
+        ? caption
+        : caption?.label || caption?.lang || caption?.language || `subtitle-${idx + 1}`;
+    const url = typeof caption === 'string' ? null : caption?.url;
+
+    if (!url) {
+      showMessage('No download link', `No URL is available for ${label}.`);
+      return;
+    }
+
+    const safeLabel = String(label).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const ext = url.split('.').pop().split('?')[0].slice(0, 5) || 'vtt';
+    const filename = `${(match?.slug || match?.name || 'video').replace(/[^a-zA-Z0-9_-]/g, '_')}-${safeLabel}.${ext}`;
+    const dest = FileSystem.documentDirectory + filename;
+
+    setDownloadingCaption(label);
+    try {
+      const downloadResumable = FileSystem.createDownloadResumable(url, dest, {});
+      const result = await downloadResumable.downloadAsync();
+
+      const info = await FileSystem.getInfoAsync(result.uri);
+      if (!info.exists) {
+        throw new Error('Downloaded subtitle file is missing.');
+      }
+
+      showMessage('Download complete', `Saved ${label} subtitle.\n\nPath: ${result.uri}`);
+    } catch (err) {
+      console.error('[CAPTION DOWNLOAD] FAILED:', err);
+      showMessage('Download failed', err?.message || 'Something went wrong.');
+    } finally {
+      setDownloadingCaption(null);
     }
   };
 
@@ -338,6 +410,57 @@ export default function DScreen() {
               No stream sources found for this title.
             </Text>
           )}
+
+          {/* Available subtitles for this se/ep — rendered below the video
+              quality list, same row styling so it reads as a second
+              downloadable list rather than a decorative tag row. */}
+          {captionsLoading ? (
+            <View className="items-center py-4">
+              <ActivityIndicator color={colors.marquee} />
+            </View>
+          ) : captions.length > 0 ? (
+            <View className="mt-2">
+              <Text
+                style={{
+                  fontFamily: 'Inter_600SemiBold',
+                  fontSize: 12,
+                  color: colors.inkMuted,
+                  marginBottom: 8,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                }}
+              >
+                Subtitles
+              </Text>
+              {captions.map((c, idx) => {
+                const label =
+                  typeof c === 'string' ? c : c?.label || c?.lang || c?.language || `Subtitle ${idx + 1}`;
+                const isThisDownloading = downloadingCaption === label;
+                return (
+                  <Pressable
+                    key={label + idx}
+                    onPress={() => handleDownloadCaption(c, idx)}
+                    disabled={isAnyDownloading}
+                    className="flex-row items-center justify-between rounded-2xl px-4 py-3 mb-2"
+                    style={{
+                      backgroundColor: colors.surface,
+                      opacity: isAnyDownloading ? (isThisDownloading ? 0.85 : 0.35) : 1,
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>
+                      {label}
+                    </Text>
+                    {isThisDownloading ? (
+                      <ActivityIndicator size="small" color={colors.marquee} />
+                    ) : (
+                      <Feather name="download" size={16} color={colors.ink} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
         </ScrollView>
       ) : (
         <View className="flex-1 items-center justify-center px-8">
