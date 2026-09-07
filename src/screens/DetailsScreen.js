@@ -90,10 +90,13 @@ export default function DetailsScreen() {
 
   // ── Ad overlay (Monetag direct link, opened via in-app browser tab) ──
   // adVisible: the "watch ad" prompt is up.
-  // adOpening: the in-app browser tab is being opened / is open — disables
-  //   the buttons so they can't be tapped while we wait for it to close.
+  // activeAction: which button is currently mid-flow — null | 'stream' |
+  //   'download'. Replaces the old single `adOpening` boolean so only the
+  //   button actually clicked shows its spinner; the other two just get
+  //   disabled + dimmed instead of also animating.
   const [adVisible, setAdVisible] = useState(false);
-  const [adOpening, setAdOpening] = useState(false);
+  const [activeAction, setActiveAction] = useState(null);
+  const adOpening = activeAction !== null; // true while ANY action is in flight
 
   // target: which screen proceedToPlay should navigate to once the ad
   // gate is satisfied — 'Stream' (default source) or 'DStream' (alt source).
@@ -212,7 +215,7 @@ export default function DetailsScreen() {
 
   const proceedToPlay = async (overrideTarget) => {
     setAdVisible(false);
-    setAdOpening(false);
+    setActiveAction(null);
     const { season, episode, target: pendingTarget } = pendingPlayRef.current;
     const target = overrideTarget || pendingTarget;
 
@@ -235,7 +238,7 @@ export default function DetailsScreen() {
   };
 
   const handleAcceptAd = async () => {
-    setAdOpening(true);
+    setActiveAction('stream');
     // Cooldown starts only once the user actually agrees to watch — not
     // when the prompt merely opens — so cancelling doesn't grant a free
     // skip-the-ad window on the next Play tap.
@@ -253,13 +256,13 @@ export default function DetailsScreen() {
     }
   };
 
-  // Alt-source option, now surfaced inside the ad prompt itself (under
-  // "Watch Ad & Continue") rather than as its own button on the page.
-  // Same ad-gate as the default source — opens the ad tab, then navigates
-  // to the D-source screen (DScreen route registered as 'DStream') with
-  // the params handlePlay already stashed in pendingPlayRef.
+  // Alt-source option, surfaced inside the ad prompt itself (under "Watch
+  // Ad & Stream") rather than as its own button on the page. Same ad-gate
+  // as the default source — opens the ad tab, then navigates to the
+  // D-source screen (DScreen route registered as 'DStream') with the
+  // params handlePlay already stashed in pendingPlayRef.
   const handleGoToDSource = async () => {
-    setAdOpening(true);
+    setActiveAction('download');
     lastAdShownRef.current = Date.now();
     try {
       await WebBrowser.openBrowserAsync(AD_URL);
@@ -273,7 +276,7 @@ export default function DetailsScreen() {
   // Cancel just closes the prompt — no navigation, no ad, nothing plays.
   const handleCancelAd = () => {
     setAdVisible(false);
-    setAdOpening(false);
+    setActiveAction(null);
   };
 
   const handleWishlist = async () => {
@@ -483,6 +486,9 @@ export default function DetailsScreen() {
           Watch a quick ad to continue to your video.
         </Text>
 
+        {/* Watch Ad & Stream — only spins/disables-itself when THIS is the
+            active action; if the download button was clicked instead, this
+            one just dims out via the shared `adOpening` disabled state. */}
         <Pressable
           onPress={adOpening ? undefined : handleAcceptAd}
           disabled={adOpening}
@@ -491,10 +497,10 @@ export default function DetailsScreen() {
             backgroundColor: colors.marquee,
             minWidth: 200,
             alignItems: 'center',
-            opacity: adOpening ? 0.6 : 1,
+            opacity: adOpening ? (activeAction === 'stream' ? 0.85 : 0.35) : 1,
           }}
         >
-          {adOpening ? (
+          {activeAction === 'stream' ? (
             <ActivityIndicator size="small" color={colors.bg} />
           ) : (
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.bg }}>
@@ -512,10 +518,10 @@ export default function DetailsScreen() {
             borderWidth: 1,
             borderColor: colors.marqueeDim,
             minWidth: 200,
-            opacity: adOpening ? 0.4 : 1,
+            opacity: adOpening ? (activeAction === 'download' ? 0.85 : 0.35) : 1,
           }}
         >
-          {adOpening ? (
+          {activeAction === 'download' ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <>
@@ -537,7 +543,7 @@ export default function DetailsScreen() {
             borderColor: 'rgba(255,255,255,0.2)',
             minWidth: 200,
             alignItems: 'center',
-            opacity: adOpening ? 0.4 : 1,
+            opacity: adOpening ? 0.35 : 1,
           }}
         >
           <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: 'rgba(255,255,255,0.7)' }}>

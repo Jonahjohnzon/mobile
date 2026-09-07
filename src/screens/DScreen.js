@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Image, Pressable, ActivityIndicator, ScrollView, Alert } from 'react-native';
+import { View, Text, Image, Pressable, ActivityIndicator, ScrollView, Modal } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -38,8 +38,17 @@ export default function DScreen() {
   const [selectedEpisode, setSelectedEpisode] = useState(1);
 
   // Which resolution is currently downloading, and its progress 0-1.
+  // Non-null means a download is in flight — ALL resolution buttons should
+  // disable while this is set, not just the one that was tapped.
   const [downloadingRes, setDownloadingRes] = useState(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const isAnyDownloading = downloadingRes !== null;
+
+  // In-app message modal — replaces native Alert for success/error/
+  // permission messages so it stays consistent with the rest of the UI.
+  const [messageModal, setMessageModal] = useState({ visible: false, title: '', message: '' });
+  const showMessage = (title, message) => setMessageModal({ visible: true, title, message });
+  const closeMessage = () => setMessageModal((m) => ({ ...m, visible: false }));
 
   const fetchStream = async (item, se, ep) => {
     setStreamLoading(true);
@@ -165,100 +174,72 @@ export default function DScreen() {
   const isSeries = seasons.length > 0 && !!currentSeasonEntry && selectedSeason !== 0;
 
   const handleDownload = async (source) => {
-  if (!source?.url) {
-    Alert.alert('No download link', 'No URL is available.');
-    return;
-  }
-
-  const { status } = await MediaLibrary.requestPermissionsAsync();
-
-  if (status !== 'granted') {
-    Alert.alert(
-      'Permission needed',
-      'Allow media library access to save the video.'
-    );
-    return;
-  }
-
-  const safeName = (match?.slug || match?.name || 'video')
-    .replace(/[^a-zA-Z0-9_-]/g, '_');
-
-  const filename = `${safeName}-${source.resolution}.mp4`;
-  const tempDest = FileSystem.cacheDirectory + filename;
-
-  setDownloadingRes(source.resolution);
-  setDownloadProgress(0);
-
-  try {
-
-    const downloadResumable = FileSystem.createDownloadResumable(
-      source.url,
-      tempDest,
-      {
-        headers: {
-          Accept: 'video/mp4,video/*,*/*',
-        },
-      },
-      (progress) => {
-        if (progress.totalBytesExpectedToWrite > 0) {
-          setDownloadProgress(
-            progress.totalBytesWritten /
-            progress.totalBytesExpectedToWrite
-          );
-        }
-      }
-    );
-
-    const result = await downloadResumable.downloadAsync();
-
-
-    const info = await FileSystem.getInfoAsync(result.uri);
-
-    if (!info.exists || info.size < 100000) {
-      throw new Error(
-        `Downloaded file is invalid: ${info.size || 0} bytes`
-      );
+    if (!source?.url) {
+      showMessage('No download link', 'No URL is available.');
+      return;
     }
 
-    const asset = await MediaLibrary.createAssetAsync(result.uri);
+    const { status } = await MediaLibrary.requestPermissionsAsync();
 
-    const albumName = 'Silo';
-    const album = await MediaLibrary.getAlbumAsync(albumName);
-
-    if (album) {
-      await MediaLibrary.addAssetsToAlbumAsync(
-        [asset],
-        album,
-        false
-      );
-    } else {
-      await MediaLibrary.createAlbumAsync(
-        albumName,
-        asset,
-        false
-      );
+    if (status !== 'granted') {
+      showMessage('Permission needed', 'Allow media library access to save the video.');
+      return;
     }
 
-    await FileSystem.deleteAsync(result.uri, {
-      idempotent: true,
-    });
+    const safeName = (match?.slug || match?.name || 'video').replace(/[^a-zA-Z0-9_-]/g, '_');
 
-    Alert.alert(
-      'Download complete',
-      `Saved ${source.resolution} to ${albumName}.`
-    );
+    const filename = `${safeName}-${source.resolution}.mp4`;
+    const tempDest = FileSystem.cacheDirectory + filename;
 
-  } catch (err) {
-    console.error('[DOWNLOAD] FAILED:', err);
-    Alert.alert(
-      'Download failed',
-      err?.message || 'Something went wrong.'
-    );
-  } finally {
-    setDownloadingRes(null);
+    setDownloadingRes(source.resolution);
     setDownloadProgress(0);
-  }
-};
+
+    try {
+      const downloadResumable = FileSystem.createDownloadResumable(
+        source.url,
+        tempDest,
+        {
+          headers: {
+            Accept: 'video/mp4,video/*,*/*',
+          },
+        },
+        (progress) => {
+          if (progress.totalBytesExpectedToWrite > 0) {
+            setDownloadProgress(progress.totalBytesWritten / progress.totalBytesExpectedToWrite);
+          }
+        }
+      );
+
+      const result = await downloadResumable.downloadAsync();
+
+      const info = await FileSystem.getInfoAsync(result.uri);
+
+      if (!info.exists || info.size < 100000) {
+        throw new Error(`Downloaded file is invalid: ${info.size || 0} bytes`);
+      }
+
+      const asset = await MediaLibrary.createAssetAsync(result.uri);
+
+      const albumName = 'Gallery';
+      const album = await MediaLibrary.getAlbumAsync(albumName);
+
+      if (album) {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      } else {
+        await MediaLibrary.createAlbumAsync(albumName, asset, false);
+      }
+
+      await FileSystem.deleteAsync(result.uri, { idempotent: true });
+
+      showMessage('Download complete', `Saved to ${albumName}.`);
+    } catch (err) {
+      console.error('[DOWNLOAD] FAILED:', err);
+      showMessage('Download failed', err?.message || 'Something went wrong.');
+    } finally {
+      setDownloadingRes(null);
+      setDownloadProgress(0);
+    }
+  };
 
   return (
     <View className="flex-1 bg-bg">
@@ -318,14 +299,20 @@ export default function DScreen() {
           ) : streamInfo?.sources?.length ? (
             <>
               {streamInfo.sources.map((source) => {
-                const isDownloading = downloadingRes === source.resolution;
+                const isThisDownloading = downloadingRes === source.resolution;
+                // Disabled if THIS one is downloading, or any other one is —
+                // only one download runs at a time across all buttons.
+                const isDisabled = isAnyDownloading;
                 return (
                   <Pressable
                     key={source.resolution}
                     onPress={() => handleDownload(source)}
-                    disabled={isDownloading}
+                    disabled={isDisabled}
                     className="flex-row items-center justify-between rounded-2xl px-4 py-3.5 mb-2"
-                    style={{ backgroundColor: colors.surface, opacity: isDownloading ? 0.7 : 1 }}
+                    style={{
+                      backgroundColor: colors.surface,
+                      opacity: isDisabled ? (isThisDownloading ? 0.85 : 0.35) : 1,
+                    }}
                   >
                     <View>
                       <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>
@@ -335,7 +322,7 @@ export default function DScreen() {
                         {source.format} · {formatBytes(source.size)}
                       </Text>
                     </View>
-                    {isDownloading ? (
+                    {isThisDownloading ? (
                       <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.marquee }}>
                         {Math.round(downloadProgress * 100)}%
                       </Text>
@@ -362,6 +349,46 @@ export default function DScreen() {
           </Text>
         </View>
       )}
+
+      {/* In-app message modal — replaces native Alert */}
+      <Modal visible={messageModal.visible} transparent animationType="fade" onRequestClose={closeMessage}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 32,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              borderRadius: 16,
+              padding: 20,
+              backgroundColor: colors.bg,
+              borderWidth: 1,
+              borderColor: colors.surface,
+            }}
+          >
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.ink, marginBottom: 6 }}>
+              {messageModal.title}
+            </Text>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.inkMuted, lineHeight: 19 }}>
+              {messageModal.message}
+            </Text>
+            <Pressable
+              onPress={closeMessage}
+              className="rounded-full items-center justify-center mt-5 py-3"
+              style={{ backgroundColor: colors.marquee }}
+            >
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.bg }}>
+                OK
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
