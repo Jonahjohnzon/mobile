@@ -271,40 +271,30 @@ export default function DScreen() {
         throw new Error(`Downloaded file is invalid: ${info.size || 0} bytes`);
       }
 
-      if (Platform.OS === 'android') {
-        // Android: hand the file to a user-picked SAF directory (e.g. the
-        // real "Download" folder) instead of the media library album, since
-        // that's what actually shows up in Files/Downloads apps.
-        const dirUri = await getDownloadDirUri();
-        if (!dirUri) {
-          throw new Error('Folder access was not granted, so the file could not be saved.');
-        }
+      // Video goes through MediaLibrary on both platforms — it copies the
+      // file natively (no JS string, no bridge), so it doesn't care how
+      // large the file is. SAF/base64 was tried here for Android to land
+      // videos literally in "Download", but reading a whole movie file into
+      // a JS base64 string blows the heap and crashes with an
+      // OutOfMemoryError on real devices. Captions stay on SAF below since
+      // those files are only a few KB.
+      const asset = await MediaLibrary.createAssetAsync(result.uri);
 
-        const savedUri = await saveToSAF(result.uri, filename, 'video/mp4', dirUri);
-        await FileSystem.deleteAsync(result.uri, { idempotent: true });
+      const albumName = 'Gallery';
+      const album = await MediaLibrary.getAlbumAsync(albumName);
 
-        showMessage('Download complete', `Saved ${source.resolution}.\n\nPath: ${savedUri}`);
+      if (album) {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
       } else {
-        // iOS has no public "Downloads" folder — Photos (via MediaLibrary)
-        // is the closest equivalent, so keep the original flow here.
-        const asset = await MediaLibrary.createAssetAsync(result.uri);
-
-        const albumName = 'Silo';
-        const album = await MediaLibrary.getAlbumAsync(albumName);
-
-        if (album) {
-          await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-        } else {
-          await MediaLibrary.createAlbumAsync(albumName, asset, false);
-        }
-
-        await FileSystem.deleteAsync(result.uri, { idempotent: true });
-
-        showMessage(
-          'Download complete',
-          `Saved ${source.resolution} to ${albumName}.\n\nPath: ${asset.uri}`
-        );
+        await MediaLibrary.createAlbumAsync(albumName, asset, false);
       }
+
+      await FileSystem.deleteAsync(result.uri, { idempotent: true });
+
+      showMessage(
+        'Download complete',
+        `Saved Movie in ${albumName}.\n\nPath: ${asset.uri}`
+      );
     } catch (err) {
       console.error('[DOWNLOAD] FAILED:', err);
       showMessage('Download failed', err?.message || 'Something went wrong.');
@@ -323,7 +313,7 @@ export default function DScreen() {
     const label =
       typeof caption === 'string'
         ? caption
-        : caption?.label || caption?.lang || caption?.language || `subtitle-${idx + 1}`;
+        : caption?.lanName || caption?.lan || caption?.language || `subtitle-${idx + 1}`;
     const url = typeof caption === 'string' ? null : caption?.url;
 
     if (!url) {
