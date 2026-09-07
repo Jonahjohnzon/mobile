@@ -58,11 +58,11 @@ async function saveToSAF(sourceUri, filename, mimeType, dirUri) {
 // Returns true if granted, otherwise shows a message and returns false.
 async function ensureMediaLibraryPermission(showMessage) {
   try {
-    const { status: existingStatus } = await MediaLibrary.getPermissionsAsync(true);
+    const { status: existingStatus } = await MediaLibrary.getPermissionsAsync();
     let finalStatus = existingStatus;
 
     if (existingStatus !== 'granted') {
-      const { status, canAskAgain } = await MediaLibrary.requestPermissionsAsync(true);
+      const { status, canAskAgain } = await MediaLibrary.requestPermissionsAsync();
       finalStatus = status;
 
       if (status !== 'granted' && !canAskAgain) {
